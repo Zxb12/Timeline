@@ -62,9 +62,25 @@ void Serveur::paquetRecu(Paquet *in)
     quint16 opCode;
     *in >> opCode;
 
-    OpCodeHandler handler = OpCodeTable[opCode];
-    console("Paquet reçu: " + handler.nom + "("+nbr(opCode)+")");
-    (this->*handler.f)(in, client);
+    //Vérification de l'OpCode
+    if (opCode < NB_OPCODES)
+    {
+        OpCodeHandler handler = OpCodeTable[opCode];
+        console("Paquet reçu: " + handler.nom + "("+nbr(opCode)+")");
+
+        //Vérification des droits
+        if (handler.state & client->sessionState())
+            (this->*handler.f)(in, client);
+        else
+        {
+            console("SessionState invalide !");
+            kick(client);
+        }
+    }
+    else
+    {
+        console("Paquet invalide reçu: " + nbr(opCode));
+    }
 
     delete in;
 }
@@ -81,9 +97,9 @@ void Serveur::kick(Client *client)
     client->socket()->disconnectFromHost();
 }
 
-void Serveur::handleServerSide(Paquet *in, Client *client)
+void Serveur::handleServerSide(Paquet *, Client *)
 {
-
+    console("Reçu un paquet de serveur");
 }
 
 void Serveur::handleHello(Paquet *in, Client *client)
@@ -100,6 +116,9 @@ void Serveur::handleHello(Paquet *in, Client *client)
         kick(client);
         return;
     }
+
+    //Mise à jour de l'état de la connexion du client
+    client->setSessionState(CHECKED);
 
     //Renvoi d'un paquet Hello
     Paquet out;
