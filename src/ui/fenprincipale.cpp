@@ -2,6 +2,7 @@
 #include "ui_fenprincipale.h"
 
 #include <QTime>
+#include <QDir>
 
 FenPrincipale::FenPrincipale(QWidget *parent) :
     QMainWindow(parent), ui(new Ui::FenPrincipale)
@@ -16,7 +17,7 @@ FenPrincipale::FenPrincipale(QWidget *parent) :
     connect(m_client, SIGNAL(consoleOut(QString)), this, SLOT(consoleClient(QString)));
     connect(m_serveur, SIGNAL(consoleOut(QString)), this, SLOT(consoleServeur(QString)));
 
-    m_serveur->start(TIMELINE_PORT);
+    m_serveur->start(QDir("E:/Timeline"), TIMELINE_PORT);
     m_client->connecte("localhost", TIMELINE_PORT);
 }
 
