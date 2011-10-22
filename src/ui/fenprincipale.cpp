@@ -17,6 +17,8 @@ FenPrincipale::FenPrincipale(QWidget *parent) :
     connect(m_client, SIGNAL(consoleOut(QString)), this, SLOT(consoleClient(QString)));
     connect(m_serveur, SIGNAL(consoleOut(QString)), this, SLOT(consoleServeur(QString)));
 
+    connect(ui->btn1, SIGNAL(clicked()), m_serveur, SLOT(creerFichierTest()));
+
     m_serveur->start(QDir("E:/Timeline"), TIMELINE_PORT);
     m_client->connecte("localhost", TIMELINE_PORT);
 }

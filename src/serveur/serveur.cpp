@@ -3,11 +3,13 @@
 #include "src/shared/shared.h"
 #include "src/shared/paquet.h"
 
+#include <QDirIterator>
+
 namespace Serveur
 {
 
 Serveur::Serveur(QObject *parent) :
-    QObject(parent)
+    QObject(parent), m_stockage(), m_idFichier(0), m_cache()
 {
     m_serveur = new QTcpServer(this);
 
@@ -29,6 +31,7 @@ quint16 Serveur::start(QDir stockage, quint16 port = 0)
         return 0;
     }
 
+    //Chargement du cache
     chargeCache();
 
     //Création du dossier de stockage si besoin
@@ -38,6 +41,21 @@ quint16 Serveur::start(QDir stockage, quint16 port = 0)
     console("Serveur démarré (hôte: " + m_serveur->serverAddress().toString() + ", port:" + nbr(m_serveur->serverPort()) + ")");
 
     return m_serveur->serverPort();
+}
+
+void Serveur::creerFichierTest()
+{
+    QString fileName = "_0000000000000.tlf";
+    QString nbr = QString::number(m_idFichier, 36);
+    fileName.replace(13 + 1 - nbr.size(), nbr.size(), nbr);
+    QFile file(m_stockage.absolutePath() + "/" + fileName);
+
+    file.open(QIODevice::WriteOnly);
+    QDataStream stream(&file);
+    stream << quint8(filesystemVersion << 2) << QString("Nom du fichier.bak") << (quint16) 2 << (quint16) 1 << QDateTime::currentDateTime();
+    file.close();
+
+    m_idFichier++;
 }
 
 void Serveur::chargeCache()
@@ -64,7 +82,7 @@ void Serveur::chargeCache()
     stream >> version;
 
     //Vérification de la version du cache
-    if (version != CACHE_VERSION)
+    if (version != filesystemVersion)
     {
         cache.close();
         reconstruireCache();
@@ -72,16 +90,33 @@ void Serveur::chargeCache()
     }
 
     //Récupération des infos du cache
+    stream >> m_idFichier;
     while (!stream.atEnd())
     {
-        QString nomFichier;
-        quint16 noSauvegarde, noVersion;
-        QDateTime derniereModif;
-        stream >> nomFichier >> noSauvegarde >> noVersion >> derniereModif;
-        CacheEntry entry = {nomFichier, noSauvegarde, noVersion, derniereModif};
-        m_cache << entry;
+        CacheEntry entry;
+        stream >> entry.nomFichier >> entry.nomReel >> entry.noSauvegarde >> entry.noVersion >> entry.derniereModif;
+        ajouteAuCache(entry);
+    }
+    cache.close();
+}
+
+void Serveur::sauveCache()
+{
+    //Ouverture du cache
+    QFile cache(m_stockage.absolutePath() + "/" CACHE);
+    if (!cache.open(QIODevice::WriteOnly | QIODevice::Truncate))
+    {
+        console("Impossible de sauvegarder le cache: " + cache.errorString());
+        return;
     }
 
+    //Ecriture du cache
+    QDataStream stream(&cache);
+    stream << filesystemVersion << m_idFichier;
+    foreach (CacheEntry entry, m_cache)
+    {
+        stream << entry.nomFichier << entry.nomReel << entry.noSauvegarde << entry.noVersion << entry.derniereModif;
+    }
 }
 
 void Serveur::reconstruireCache()
@@ -91,6 +126,7 @@ void Serveur::reconstruireCache()
     QString cachePath = m_stockage.absolutePath() + "/" CACHE;
     QString oldCachePath = cachePath + ".old";
     QFile cache(cachePath);
+    m_idFichier = 0;
 
     //Suppression du cache si nécessaire
     if (cache.exists())
@@ -101,18 +137,74 @@ void Serveur::reconstruireCache()
         cache.setFileName(cachePath); //On remet le nom du fichier à sa valeur originale (elle a changé lors du renommage)
     }
 
-    if (!cache.open(QIODevice::WriteOnly))
-        return;
+    //Génération des entrées du cache
+    QDirIterator itr(m_stockage.absolutePath(), QStringList("_*.tlf"), QDir::Files);
+    while (itr.hasNext())
+    {
+        itr.next();
+        console("Fichier trouvé: " + itr.fileName());
 
-    QDataStream stream(&cache);
-    stream << quint8(CACHE_VERSION);
+        //Extraction du No de fichier
+        QString fileName = itr.fileName();
+        fileName.remove(0, 1);
+        fileName.remove(".tlf");
 
-    //TODO ajouter au cache les fichiers présents
+        m_idFichier = qMax(m_idFichier, fileName.toULongLong(0, 36));
 
+        //Création de l'entrée de cache.
+        QFile file(itr.filePath());
+        if (!file.open(QIODevice::ReadOnly))
+        {
+            console("Impossible d'ouvrir le fichier: " + file.errorString());
+            continue;
+        }
+
+        //Vérification de la version du fichier
+        QDataStream fileStream(&file);
+        quint8 octetEnTete, version;
+        fileStream >> octetEnTete;
+        version = octetEnTete >> 2; //On décale les bits à droite pour effacer les bits dossier et supprimé.
+        if (version != filesystemVersion)
+        {
+            console("Fichier d'une ancienne version(" + nbr(version) + ")");
+            continue;
+        }
+
+        CacheEntry entry;
+        entry.nomFichier = itr.fileName();
+        fileStream >> entry.nomReel >> entry.noSauvegarde >> entry.noVersion >> entry.derniereModif;
+        ajouteAuCache(entry);
+
+    }
     cache.close();
-    console("Reconstruction terminée");
 
-    chargeCache();
+    //On incrémente l'ID de fichier pour qu'il corresponde au prochain fichier
+    m_idFichier++;
+
+    console("Reconstruction terminée");
+    sauveCache();
+}
+
+void Serveur::ajouteAuCache(const CacheEntry &entry)
+{
+    //Recherche du fichier dans le cache
+    int index = m_cache.indexOf(entry);
+
+    //Si le fichier n'est pas dans le cache, on l'y ajoute
+    if (index == -1)
+    {
+        m_cache << entry;
+    }
+    //Sinon, on met à jour le fichier dans le cache
+    else
+    {
+        if (entry.noVersion > m_cache[index].noVersion)
+        {
+            Q_ASSERT(entry.noSauvegarde > m_cache[index].noSauvegarde);
+            m_cache[index] = entry;
+        }
+    }
+
 }
 
 void Serveur::clientConnecte()
