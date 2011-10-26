@@ -16,6 +16,11 @@ Serveur::Serveur(QObject *parent) :
     connect(m_serveur, SIGNAL(newConnection()), this, SLOT(clientConnecte()));
 }
 
+Serveur::~Serveur()
+{
+    sauveCache();
+}
+
 void Serveur::console(const QString &msg)
 {
     emit consoleOut(msg);
@@ -45,17 +50,17 @@ quint16 Serveur::start(QDir stockage, quint16 port = 0)
 
 void Serveur::creerFichierTest()
 {
-    QString fileName = "_0000000000000.tlf";
-    QString nbr = QString::number(m_idFichier, 36);
-    fileName.replace(13 + 1 - nbr.size(), nbr.size(), nbr);
-    QFile file(m_stockage.absolutePath() + "/" + fileName);
+    console("Création d'un fichier de test: " + QString::number(m_idFichier, 36));
 
-    file.open(QIODevice::WriteOnly);
-    QDataStream stream(&file);
-    stream << quint8(filesystemVersion << 2) << QString("Nom du fichier.bak") << (quint16) 2 << (quint16) 1 << QDateTime::currentDateTime();
-    file.close();
+    FileHeader header;
+    header.nomReel = "C:/dossier/fichier.txt";
+    header.noSauvegarde = m_idFichier;
+    header.noVersion = (m_idFichier + 1) / 2;
+    header.derniereModif = QDateTime::currentDateTime();
+    header.estUnDossier = false;
 
-    m_idFichier++;
+    debuteTransfert(header);
+    termineTransfert();
 }
 
 void Serveur::chargeCache()
@@ -205,6 +210,73 @@ void Serveur::ajouteAuCache(const CacheEntry &entry)
         }
     }
 
+}
+
+void Serveur::creeFichierDeTransfert()
+{
+    //Génération du fichier
+    QString nbr = QString::number(m_idFichier, 36);
+    QString nomFichier = "_" + QString("0").repeated(13 - nbr.size()) + nbr + ".tlf";
+    m_fichierEnTransfert.fichier = new QFile(m_stockage.absolutePath() + "/" + nomFichier, this);
+    if (!m_fichierEnTransfert.fichier->open(QIODevice::WriteOnly))
+    {
+        console("Impossible d'ouvrir/créer le fichier " + nomFichier);
+        return;
+    }
+}
+
+void Serveur::debuteTransfert(const FileHeader &header)
+{
+    creeFichierDeTransfert();
+
+    //Ecriture de l'en-tête.
+    QDataStream stream(m_fichierEnTransfert.fichier);
+    quint8 octetEnTete = (filesystemVersion << 2) | (header.estUnDossier << 1);
+    stream << octetEnTete << header.nomReel << header.noSauvegarde << header.noVersion << header.derniereModif;
+
+    (FileHeader) m_fichierEnTransfert = header;
+    m_transfertEnCours = true;
+}
+
+void Serveur::termineTransfert()
+{
+    //Ajoute l'entrée dans le cache
+    CacheEntry entry;
+    (FileHeader) entry = (FileHeader) m_fichierEnTransfert;
+    entry.nomFichier = m_fichierEnTransfert.fichier->fileName();
+    ajouteAuCache(entry);
+
+    //Fermeture du fichier et fin du transfert
+    m_fichierEnTransfert.fichier->close();
+    delete m_fichierEnTransfert.fichier;
+    m_fichierEnTransfert.fichier = 0;
+    m_transfertEnCours = false;
+    m_idFichier++;
+}
+
+void Serveur::annuleTransfert()
+{
+    if (m_transfertEnCours)
+    {
+        //Supprime le fichier
+        m_fichierEnTransfert.fichier->remove();
+        delete m_fichierEnTransfert.fichier;
+        m_fichierEnTransfert.fichier = 0;
+        m_transfertEnCours = false;
+    }
+}
+
+void Serveur::supprimeFichier(const FileHeader &header)
+{
+    creeFichierDeTransfert();
+
+    //Ecriture de l'en-tête.
+    QDataStream stream(m_fichierEnTransfert.fichier);
+    quint8 octetEnTete = (filesystemVersion << 2) | (header.estUnDossier << 1) | 1;
+    stream << octetEnTete << header.nomReel << header.noSauvegarde << header.noVersion << header.derniereModif;
+
+    //Fermeture du fichier
+    termineTransfert();
 }
 
 void Serveur::clientConnecte()

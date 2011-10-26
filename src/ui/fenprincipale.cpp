@@ -11,8 +11,8 @@ FenPrincipale::FenPrincipale(QWidget *parent) :
 
     //Création des objets serveur et client
     //TODO: les allouer seulement quand c'est nécessaire (au lancement de la sauvegarde)
-    m_client = new Client::Client;
-    m_serveur = new Serveur::Serveur;
+    m_client = new Client::Client(this);
+    m_serveur = new Serveur::Serveur(this);
 
     connect(m_client, SIGNAL(consoleOut(QString)), this, SLOT(consoleClient(QString)));
     connect(m_serveur, SIGNAL(consoleOut(QString)), this, SLOT(consoleServeur(QString)));

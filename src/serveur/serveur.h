@@ -14,16 +14,29 @@ namespace Serveur
 {
 
 class Client;
-const quint8 filesystemVersion = 3;
+const quint8 filesystemVersion = 4;
 
-struct CacheEntry
+struct FileHeader
 {
-    QString nomFichier, nomReel;
+    QString nomReel;
     quint16 noSauvegarde, noVersion;
     QDateTime derniereModif;
+    bool estUnDossier;
 
-    bool operator==(const CacheEntry &other)
-    { return nomReel == other.nomReel; }
+    bool operator==(const FileHeader &other)
+    {
+        return nomReel == other.nomReel;
+    }
+};
+
+struct CacheEntry : FileHeader
+{
+    QString nomFichier;
+};
+
+struct FileDescription : FileHeader
+{
+    QFile *fichier;
 };
 
 class Serveur : public QObject
@@ -31,7 +44,7 @@ class Serveur : public QObject
     Q_OBJECT
 public:
     Serveur(QObject *parent = 0);
-
+    ~Serveur();
 
     quint16 start(QDir, quint16);
 
@@ -43,11 +56,20 @@ public slots:
     void creerFichierTest();
 
 private:
-    //Helpers
+    //Helpers cache
     void chargeCache();
     void sauveCache();
     void reconstruireCache();
     void ajouteAuCache(const CacheEntry &);
+
+    //Helpers transfert
+    void creeFichierDeTransfert();
+    void debuteTransfert(const FileHeader &);
+    void termineTransfert();
+    void annuleTransfert();
+    void supprimeFichier(const FileHeader &);
+
+    //Helpers réseau
     void kick(Client *);
 
 signals:
@@ -67,6 +89,8 @@ private:
     //Dossier de stockage
     QDir m_stockage;
     quint64 m_idFichier;
+    FileDescription m_fichierEnTransfert;
+    bool m_transfertEnCours;
 
     //Cache de fichiers
     QList<CacheEntry> m_cache;
