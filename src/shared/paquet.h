@@ -23,6 +23,7 @@ public:
     Paquet& operator<<(const OpCodeValues&);
     Paquet& operator<<(const Error&);
     Paquet& operator<<(const QByteArray&);
+    Paquet& operator<<(const QDateTime&);
 
     Paquet& operator>>(bool&);
     Paquet& operator>>(quint8&);
@@ -32,6 +33,7 @@ public:
     Paquet& operator>>(QString&);
     Paquet& operator>>(QByteArray&);
     Paquet& operator>>(Error&);
+    Paquet& operator>>(QDateTime&);
 
     //Envoie le paquet préparé à la socket.
     //Doit calculer la taille du paquet avant.

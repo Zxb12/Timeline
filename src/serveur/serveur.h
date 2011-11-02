@@ -14,7 +14,7 @@ namespace Serveur
 {
 
 class Client;
-const quint8 filesystemVersion = 4;
+const quint8 filesystemVersion = 5;
 
 struct FileHeader
 {
@@ -23,20 +23,21 @@ struct FileHeader
     QDateTime derniereModif;
     bool estUnDossier;
 
-    bool operator==(const FileHeader &other)
-    {
-        return nomReel == other.nomReel;
-    }
+    bool operator==(const FileHeader &other) { return nomReel == other.nomReel; }
 };
 
 struct CacheEntry : FileHeader
 {
     QString nomFichier;
+
+    CacheEntry &operator=(const FileHeader &);
 };
 
 struct FileDescription : FileHeader
 {
     QFile *fichier;
+
+    FileDescription &operator=(const FileHeader &);
 };
 
 class Serveur : public QObject
@@ -51,6 +52,11 @@ public:
     //Handlers
     void handleHello(Paquet *, Client *);
     void handleServerSide(Paquet *, Client *);
+    void handleNewBackup(Paquet *, Client *);
+    void handleInitiateTransfer(Paquet *, Client *);
+    void handleFinishTransfer(Paquet *, Client *);
+    void handleCancelTransfer(Paquet *, Client *);
+    void handleFileData(Paquet *, Client *);
 
 public slots:
     void creerFichierTest();
@@ -61,6 +67,7 @@ private:
     void sauveCache();
     void reconstruireCache();
     void ajouteAuCache(const CacheEntry &);
+    quint16 noNouvelleVersion(const QString &);
 
     //Helpers transfert
     void creeFichierDeTransfert();
@@ -91,6 +98,7 @@ private:
     quint64 m_idFichier;
     FileDescription m_fichierEnTransfert;
     bool m_transfertEnCours;
+    quint16 m_noSauvegarde;
 
     //Cache de fichiers
     QList<CacheEntry> m_cache;

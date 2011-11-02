@@ -8,8 +8,30 @@
 namespace Serveur
 {
 
+CacheEntry &CacheEntry::operator=(const FileHeader &other)
+{
+    nomReel = other.nomReel;
+    noSauvegarde = other.noSauvegarde;
+    noVersion = other.noVersion;
+    estUnDossier = other.estUnDossier;
+    derniereModif = other.derniereModif;
+
+    return *this;
+}
+
+FileDescription &FileDescription::operator=(const FileHeader &other)
+{
+    nomReel = other.nomReel;
+    noSauvegarde = other.noSauvegarde;
+    noVersion = other.noVersion;
+    estUnDossier = other.estUnDossier;
+    derniereModif = other.derniereModif;
+
+    return *this;
+}
+
 Serveur::Serveur(QObject *parent) :
-    QObject(parent), m_stockage(), m_idFichier(0), m_cache()
+    QObject(parent), m_stockage(), m_idFichier(0), m_noSauvegarde(0), m_cache()
 {
     m_serveur = new QTcpServer(this);
 
@@ -89,18 +111,20 @@ void Serveur::chargeCache()
     //Vérification de la version du cache
     if (version != filesystemVersion)
     {
+        console("Cache obsolète...");
         cache.close();
         reconstruireCache();
         return;
     }
 
     //Récupération des infos du cache
-    stream >> m_idFichier;
+    stream >> m_idFichier >> m_noSauvegarde;
     while (!stream.atEnd())
     {
         CacheEntry entry;
         stream >> entry.nomFichier >> entry.nomReel >> entry.noSauvegarde >> entry.noVersion >> entry.derniereModif;
         ajouteAuCache(entry);
+        console("Cache: " + entry.nomReel + "(" + entry.nomFichier + "), sauv: " + nbr(entry.noSauvegarde) + ", vers: " + nbr(entry.noVersion));
     }
     cache.close();
 }
@@ -117,7 +141,7 @@ void Serveur::sauveCache()
 
     //Ecriture du cache
     QDataStream stream(&cache);
-    stream << filesystemVersion << m_idFichier;
+    stream << filesystemVersion << m_idFichier << m_noSauvegarde;
     foreach (CacheEntry entry, m_cache)
     {
         stream << entry.nomFichier << entry.nomReel << entry.noSauvegarde << entry.noVersion << entry.derniereModif;
@@ -132,6 +156,7 @@ void Serveur::reconstruireCache()
     QString oldCachePath = cachePath + ".old";
     QFile cache(cachePath);
     m_idFichier = 0;
+    m_noSauvegarde = 0;
 
     //Suppression du cache si nécessaire
     if (cache.exists())
@@ -175,11 +200,14 @@ void Serveur::reconstruireCache()
             continue;
         }
 
+        //Ajout dans le cache
         CacheEntry entry;
         entry.nomFichier = itr.fileName();
         fileStream >> entry.nomReel >> entry.noSauvegarde >> entry.noVersion >> entry.derniereModif;
         ajouteAuCache(entry);
 
+        //Vérification du No de sauvegarde
+        m_noSauvegarde = qMax(m_noSauvegarde, entry.noSauvegarde);
     }
     cache.close();
 
@@ -205,11 +233,24 @@ void Serveur::ajouteAuCache(const CacheEntry &entry)
     {
         if (entry.noVersion > m_cache[index].noVersion)
         {
-            Q_ASSERT(entry.noSauvegarde > m_cache[index].noSauvegarde);
+            Q_ASSERT(entry.noSauvegarde >= m_cache[index].noSauvegarde);
             m_cache[index] = entry;
         }
     }
+}
 
+quint16 Serveur::noNouvelleVersion(const QString &fichier)
+{
+    //Recherche le no de version du prochain fichier pour le transfert.
+    foreach(CacheEntry entry, m_cache)
+    {
+        if (entry.nomReel == fichier)
+        {
+            console("Trouvé !");
+            return entry.noVersion + 1;
+        }
+    }
+    return 0;
 }
 
 void Serveur::creeFichierDeTransfert()
@@ -234,7 +275,7 @@ void Serveur::debuteTransfert(const FileHeader &header)
     quint8 octetEnTete = (filesystemVersion << 2) | (header.estUnDossier << 1);
     stream << octetEnTete << header.nomReel << header.noSauvegarde << header.noVersion << header.derniereModif;
 
-    (FileHeader) m_fichierEnTransfert = header;
+    m_fichierEnTransfert = header;
     m_transfertEnCours = true;
 }
 
@@ -242,7 +283,7 @@ void Serveur::termineTransfert()
 {
     //Ajoute l'entrée dans le cache
     CacheEntry entry;
-    (FileHeader) entry = (FileHeader) m_fichierEnTransfert;
+    entry = m_fichierEnTransfert;
     entry.nomFichier = m_fichierEnTransfert.fichier->fileName();
     ajouteAuCache(entry);
 
@@ -366,12 +407,71 @@ void Serveur::handleHello(Paquet *in, Client *client)
     }
 
     //Mise à jour de l'état de la connexion du client
-    client->setSessionState(CHECKED);
+    client->setSessionState(AUTHED);    //TODO Changer ça lors de l'implentation d'un serveur avec gestion de compte
 
     //Renvoi d'un paquet Hello
     Paquet out;
     out << SMSG_HELLO >> client;
 }
 
+void Serveur::handleNewBackup(Paquet *, Client *)
+{
+    console("Nouvel indice de sauvegarde");
+
+    //Incrémente le no de sauvegarde pour créer la nouvelle sauvegarde
+    m_noSauvegarde++;
+}
+
+void Serveur::handleInitiateTransfer(Paquet *in, Client *client)
+{
+    //Extraction du header
+    FileHeader header;
+    *in >> header.nomReel;
+    *in >> header.estUnDossier;
+    *in >> header.derniereModif;
+
+    //Complétion du header avec les données de sauvegarde
+    header.noSauvegarde = m_noSauvegarde;
+    header.noVersion = noNouvelleVersion(header.nomReel);
+
+    //Débute le transfert
+    debuteTransfert(header);
+
+    //Met à jour le statut de session
+    client->setSessionState(TRANSFER);
+
+    //Informe le client
+    Paquet out;
+    out << SMSG_WAITING_FOR_DATA;
+    out >> client;
+}
+
+void Serveur::handleFinishTransfer(Paquet *, Client *client)
+{
+    //Achève le transfert
+    termineTransfert();
+
+    //Met à jour le statut de session
+    client->setSessionState(AUTHED);
+}
+
+void Serveur::handleCancelTransfer(Paquet *, Client *client)
+{
+    //Annule le transfert
+    annuleTransfert();
+
+    //Met à jour le statut de session
+    client->setSessionState(AUTHED);
+}
+
+void Serveur::handleFileData(Paquet *in, Client *)
+{
+    //Extraction des données
+    QByteArray data;
+    *in >> data;
+
+    //Ecriture dans le fichier
+    m_fichierEnTransfert.fichier->write(data);
+}
 
 }

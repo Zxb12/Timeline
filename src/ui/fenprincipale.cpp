@@ -17,7 +17,7 @@ FenPrincipale::FenPrincipale(QWidget *parent) :
     connect(m_client, SIGNAL(consoleOut(QString)), this, SLOT(consoleClient(QString)));
     connect(m_serveur, SIGNAL(consoleOut(QString)), this, SLOT(consoleServeur(QString)));
 
-    connect(ui->btn1, SIGNAL(clicked()), m_serveur, SLOT(creerFichierTest()));
+    connect(ui->btn1, SIGNAL(clicked()), this, SLOT(clic()));
 
     m_serveur->start(QDir("E:/Timeline"), TIMELINE_PORT);
     m_client->connecte("localhost", TIMELINE_PORT);
@@ -37,4 +37,13 @@ void FenPrincipale::consoleClient(QString msg)
 void FenPrincipale::consoleServeur(QString msg)
 {
     msg = QTime::currentTime().toString() + ": " + msg;
-    ui->consoleServeur->appendPlainText(msg);}
+    ui->consoleServeur->appendPlainText(msg);
+}
+
+void FenPrincipale::clic()
+{
+    //QFileInfo file("E:/dev/Infos sur le codec.txt");
+    QFileInfo file("E:/Camille/Téléchargements/test.exe");
+    m_client->nouvelleSauvegarde();
+    m_client->envoie(file);
+}

@@ -1,5 +1,7 @@
 #include "src/shared/paquet.h"
 
+#include <QDateTime>
+
 Paquet::Paquet() : m_paquet(), m_stream(&m_paquet, QIODevice::ReadWrite)
 {
     //On alloue la place pour la taille du paquet.
@@ -68,7 +70,11 @@ Paquet& Paquet::operator<<(const QByteArray &val)
     return *this;
 }
 
-
+Paquet& Paquet::operator<<(const QDateTime &val)
+{
+    m_stream << (QDateTime) val;
+    return *this;
+}
 
 Paquet& Paquet::operator>>(bool &val)
 {
@@ -107,6 +113,12 @@ Paquet& Paquet::operator>>(QString &val)
 }
 
 Paquet& Paquet::operator>>(QByteArray &val)
+{
+    m_stream >> val;
+    return *this;
+}
+
+Paquet& Paquet::operator>>(QDateTime &val)
 {
     m_stream >> val;
     return *this;

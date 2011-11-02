@@ -3,14 +3,17 @@
 #include "src/client/opcode_c.h"
 #include "src/shared/paquet.h"
 
+#include <QDateTime>
+
 namespace Client
 {
 
 Client::Client(QObject *parent) :
-    QObject(parent)
+    QObject(parent), m_taillePaquet(0), m_fichier(0), m_transfertEnCours(false)
 {
     m_socket = new QTcpSocket(this);
     connect(m_socket, SIGNAL(readyRead()),                                  this, SLOT(donneesRecues()));
+    connect(m_socket, SIGNAL(bytesWritten(qint64)),                         this, SLOT(donneesEcrites()));
     connect(m_socket, SIGNAL(connected()),                                  this, SLOT(connecte()));
     connect(m_socket, SIGNAL(disconnected()),                               this, SLOT(deconnecte()));
     connect(m_socket, SIGNAL(error(QAbstractSocket::SocketError)),          this, SLOT(erreurSocket(QAbstractSocket::SocketError)));
@@ -106,6 +109,79 @@ void Client::connecte(const QString &adresse, quint16 port)
     m_socket->connectToHost(adresse, port);
 }
 
+void Client::nouvelleSauvegarde()
+{
+    Paquet out;
+    out << CMSG_NEW_BACKUP;
+    out >> m_socket;
+}
+
+void Client::envoie(QFileInfo &fichier)
+{
+    //Si le fichier est un dossier, m_fichier = 0
+    if (fichier.isFile())
+    {
+        //Ouverture du fichier
+        m_fichier = new QFile(fichier.absoluteFilePath(), this);
+        if (!m_fichier->open(QIODevice::ReadOnly))
+        {
+            console("Impossible d'ouvrir le fichier " + fichier.filePath());
+            return;
+        }
+    }
+
+    //Début du transfert
+    Paquet out;
+    out << CMSG_INITIATE_TRANSFER << fichier.absoluteFilePath() << fichier.isDir() << fichier.lastModified();
+    out >> m_socket;
+}
+
+void Client::supprime(QString adresse)
+{
+
+}
+
+void Client::donneesEcrites()
+{
+    console("Données écrites, restant en buffer: " + nbr(m_socket->bytesToWrite()));
+
+    //Si l'on est en transfert et que le paquet précédent a été complètement écrit, on écrit le suivant
+    if (m_socket->bytesToWrite() == 0 && m_transfertEnCours)
+        envoiePaquet();
+}
+
+void Client::envoiePaquet()
+{
+    //Verifie si on envoie un fichier ou un dossier
+    //Si on envoie un dossier, m_fichier = 0
+    if (m_fichier)
+    {
+        //On envoie un fichier
+        QByteArray data = m_fichier->read(60000);
+
+        Paquet out;
+        out << CMSG_FILE_DATA << data;
+        out >> m_socket;
+
+        //On vérifie si l'on a envoyé tout le fichier
+        if (m_fichier->atEnd())
+        {
+            out.clear();
+            out << CMSG_FINISH_TRANSFER;
+            out >> m_socket;
+            m_transfertEnCours = false;
+        }
+    }
+    else
+    {
+        //On envoie un dossier, il n'y a qu'à achever le transfert
+        Paquet out;
+        out << CMSG_FINISH_TRANSFER;
+        out >> m_socket;
+        m_transfertEnCours = false;
+    }
+}
+
 void Client::handleClientSide(Paquet *)
 {
     console("Reçu un paquet de client");
@@ -139,9 +215,23 @@ void Client::handleKick(Paquet *)
     console("Le serveur nous a kickés");
 }
 
-void Client::handleHello(Paquet *in)
+void Client::handleHello(Paquet *)
 {
-
+    console("Reçu Hello du serveur");
 }
+
+void Client::handleWaitingForData(Paquet *)
+{
+    console("Serveur prêt à recevoir les données");
+    m_transfertEnCours = true;
+    envoiePaquet();
+}
+
+void Client::handleTransferComplete(Paquet *)
+{
+    delete m_fichier;
+    m_fichier = 0;
+}
+
 
 }

@@ -19,11 +19,18 @@ class Client : public QObject
 public:
     Client(QObject *parent = 0);
 
+    //Envoi/réception de fichiers
+    void nouvelleSauvegarde();
+    void envoie(QFileInfo &);
+    void supprime(QString);
+
     //Handlers
     void handleClientSide(Paquet*);
     void handleError(Paquet*);
     void handleKick(Paquet*);
     void handleHello(Paquet*);
+    void handleWaitingForData(Paquet*);
+    void handleTransferComplete(Paquet*);
 
 signals:
     void consoleOut(QString);
@@ -39,10 +46,17 @@ private slots:
     void donneesRecues();
     void erreurSocket(QAbstractSocket::SocketError);
 
+    void donneesEcrites();
+    void envoiePaquet();
+
 private:
     //Socket
     QTcpSocket *m_socket;
     quint16 m_taillePaquet;
+
+    //Transfert
+    QFile *m_fichier;
+    bool m_transfertEnCours;
 };
 
 }
