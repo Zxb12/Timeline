@@ -31,6 +31,7 @@ public:
     void handleHello(Paquet*);
     void handleWaitingForData(Paquet*);
     void handleTransferComplete(Paquet*);
+    void handleFileDeleted(Paquet*);
 
 signals:
     void consoleOut(QString);

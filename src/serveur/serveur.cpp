@@ -14,6 +14,7 @@ CacheEntry &CacheEntry::operator=(const FileHeader &other)
     noSauvegarde = other.noSauvegarde;
     noVersion = other.noVersion;
     estUnDossier = other.estUnDossier;
+    supprime = other.supprime;
     derniereModif = other.derniereModif;
 
     return *this;
@@ -25,6 +26,7 @@ FileDescription &FileDescription::operator=(const FileHeader &other)
     noSauvegarde = other.noSauvegarde;
     noVersion = other.noVersion;
     estUnDossier = other.estUnDossier;
+    supprime = other.supprime;
     derniereModif = other.derniereModif;
 
     return *this;
@@ -80,6 +82,7 @@ void Serveur::creerFichierTest()
     header.noVersion = (m_idFichier + 1) / 2;
     header.derniereModif = QDateTime::currentDateTime();
     header.estUnDossier = false;
+    header.supprime = false;
 
     debuteTransfert(header);
     termineTransfert();
@@ -122,7 +125,8 @@ void Serveur::chargeCache()
     while (!stream.atEnd())
     {
         CacheEntry entry;
-        stream >> entry.nomFichier >> entry.nomReel >> entry.noSauvegarde >> entry.noVersion >> entry.derniereModif;
+        stream >> entry.nomFichier >> entry.nomReel >> entry.noSauvegarde >> entry.noVersion >> entry.derniereModif
+               >> entry.estUnDossier >> entry.supprime;
         ajouteAuCache(entry);
         console("Cache: " + entry.nomReel + "(" + entry.nomFichier + "), sauv: " + nbr(entry.noSauvegarde) + ", vers: " + nbr(entry.noVersion));
     }
@@ -144,7 +148,8 @@ void Serveur::sauveCache()
     stream << filesystemVersion << m_idFichier << m_noSauvegarde;
     foreach (CacheEntry entry, m_cache)
     {
-        stream << entry.nomFichier << entry.nomReel << entry.noSauvegarde << entry.noVersion << entry.derniereModif;
+        stream << entry.nomFichier << entry.nomReel << entry.noSauvegarde << entry.noVersion << entry.derniereModif
+               << entry.estUnDossier << entry.supprime;
     }
 }
 
@@ -203,6 +208,8 @@ void Serveur::reconstruireCache()
         //Ajout dans le cache
         CacheEntry entry;
         entry.nomFichier = itr.fileName();
+        entry.estUnDossier = octetEnTete & (1 << 1);
+        entry.supprime = octetEnTete & 1;
         fileStream >> entry.nomReel >> entry.noSauvegarde >> entry.noVersion >> entry.derniereModif;
         ajouteAuCache(entry);
 
@@ -245,10 +252,7 @@ quint16 Serveur::noNouvelleVersion(const QString &fichier)
     foreach(CacheEntry entry, m_cache)
     {
         if (entry.nomReel == fichier)
-        {
-            console("Trouvé !");
             return entry.noVersion + 1;
-        }
     }
     return 0;
 }
@@ -272,7 +276,7 @@ void Serveur::debuteTransfert(const FileHeader &header)
 
     //Ecriture de l'en-tête.
     QDataStream stream(m_fichierEnTransfert.fichier);
-    quint8 octetEnTete = (filesystemVersion << 2) | (header.estUnDossier << 1);
+    quint8 octetEnTete = (filesystemVersion << 2) | (header.estUnDossier << 1) | (header.supprime);
     stream << octetEnTete << header.nomReel << header.noSauvegarde << header.noVersion << header.derniereModif;
 
     m_fichierEnTransfert = header;
@@ -305,19 +309,6 @@ void Serveur::annuleTransfert()
         m_fichierEnTransfert.fichier = 0;
         m_transfertEnCours = false;
     }
-}
-
-void Serveur::supprimeFichier(const FileHeader &header)
-{
-    creeFichierDeTransfert();
-
-    //Ecriture de l'en-tête.
-    QDataStream stream(m_fichierEnTransfert.fichier);
-    quint8 octetEnTete = (filesystemVersion << 2) | (header.estUnDossier << 1) | 1;
-    stream << octetEnTete << header.nomReel << header.noSauvegarde << header.noVersion << header.derniereModif;
-
-    //Fermeture du fichier
-    termineTransfert();
 }
 
 void Serveur::clientConnecte()
@@ -431,6 +422,7 @@ void Serveur::handleInitiateTransfer(Paquet *in, Client *client)
     *in >> header.derniereModif;
 
     //Complétion du header avec les données de sauvegarde
+    header.supprime = false;
     header.noSauvegarde = m_noSauvegarde;
     header.noVersion = noNouvelleVersion(header.nomReel);
 
@@ -440,10 +432,18 @@ void Serveur::handleInitiateTransfer(Paquet *in, Client *client)
     //Met à jour le statut de session
     client->setSessionState(TRANSFER);
 
-    //Informe le client
-    Paquet out;
-    out << SMSG_WAITING_FOR_DATA;
-    out >> client;
+    //Termine le transfert s'il envoie un dossier
+    if (header.estUnDossier)
+    {
+        termineTransfert();
+    }
+    //Sinon informe le client qu'on est prêts à recevoir les données
+    else
+    {
+        Paquet out;
+        out << SMSG_WAITING_FOR_DATA;
+        out >> client;
+    }
 }
 
 void Serveur::handleFinishTransfer(Paquet *, Client *client)
@@ -473,5 +473,30 @@ void Serveur::handleFileData(Paquet *in, Client *)
     //Ecriture dans le fichier
     m_fichierEnTransfert.fichier->write(data);
 }
+
+void Serveur::handleDeleteFile(Paquet *in, Client *client)
+{
+    //Extraction du fichier à supprimer
+    FileHeader header;
+    *in >> header.nomReel;
+    *in >> header.estUnDossier;
+
+    //Rempmlissage du header
+    header.derniereModif = QDateTime();
+    console(nbr(header.derniereModif < QDateTime::currentDateTime()));
+    header.noSauvegarde = m_noSauvegarde;
+    header.noVersion = noNouvelleVersion(header.nomReel);
+    header.supprime = true;
+
+    //Suppression du fichier
+    debuteTransfert(header);
+    termineTransfert();
+
+    //Notification de suppression
+    Paquet out;
+    out << SMSG_FILE_DELETED;
+    out >> client;
+}
+
 
 }

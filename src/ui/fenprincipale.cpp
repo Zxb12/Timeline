@@ -17,9 +17,7 @@ FenPrincipale::FenPrincipale(QWidget *parent) :
     connect(m_client, SIGNAL(consoleOut(QString)), this, SLOT(consoleClient(QString)));
     connect(m_serveur, SIGNAL(consoleOut(QString)), this, SLOT(consoleServeur(QString)));
 
-    connect(ui->btn1, SIGNAL(clicked()), this, SLOT(clic()));
-
-    m_serveur->start(QDir("E:/Timeline"), TIMELINE_PORT);
+    m_serveur->start(QDir("Z:/Timeline"), TIMELINE_PORT);
     m_client->connecte("localhost", TIMELINE_PORT);
 }
 
@@ -40,10 +38,14 @@ void FenPrincipale::consoleServeur(QString msg)
     ui->consoleServeur->appendPlainText(msg);
 }
 
-void FenPrincipale::clic()
+void FenPrincipale::on_btn1_clicked()
 {
-    //QFileInfo file("E:/dev/Infos sur le codec.txt");
-    QFileInfo file("E:/Camille/Téléchargements/test.exe");
+    QFileInfo file("E:/Musique.mp3");
     m_client->nouvelleSauvegarde();
     m_client->envoie(file);
+}
+
+void FenPrincipale::on_btn2_clicked()
+{
+    m_client->supprime("E:/Musique.mp3");
 }

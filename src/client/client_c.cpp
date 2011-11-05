@@ -138,7 +138,10 @@ void Client::envoie(QFileInfo &fichier)
 
 void Client::supprime(QString adresse)
 {
-
+    //Supprime un fichier du serveur
+    Paquet out;
+    out << CMSG_DELETE_FILE << adresse;
+    out >> m_socket;
 }
 
 void Client::donneesEcrites()
@@ -152,30 +155,18 @@ void Client::donneesEcrites()
 
 void Client::envoiePaquet()
 {
-    //Verifie si on envoie un fichier ou un dossier
-    //Si on envoie un dossier, m_fichier = 0
-    if (m_fichier)
-    {
-        //On envoie un fichier
-        QByteArray data = m_fichier->read(60000);
 
-        Paquet out;
-        out << CMSG_FILE_DATA << data;
-        out >> m_socket;
+    //On envoie un fichier
+    QByteArray data = m_fichier->read(60000);
 
-        //On vérifie si l'on a envoyé tout le fichier
-        if (m_fichier->atEnd())
-        {
-            out.clear();
-            out << CMSG_FINISH_TRANSFER;
-            out >> m_socket;
-            m_transfertEnCours = false;
-        }
-    }
-    else
+    Paquet out;
+    out << CMSG_FILE_DATA << data;
+    out >> m_socket;
+
+    //On vérifie si l'on a envoyé tout le fichier
+    if (m_fichier->atEnd())
     {
-        //On envoie un dossier, il n'y a qu'à achever le transfert
-        Paquet out;
+        out.clear();
         out << CMSG_FINISH_TRANSFER;
         out >> m_socket;
         m_transfertEnCours = false;
@@ -231,6 +222,11 @@ void Client::handleTransferComplete(Paquet *)
 {
     delete m_fichier;
     m_fichier = 0;
+}
+
+void Client::handleFileDeleted(Paquet*)
+{
+    console("Fichier supprimé du serveur.");
 }
 
 

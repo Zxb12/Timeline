@@ -22,7 +22,8 @@ private slots:
     void consoleClient(QString);
     void consoleServeur(QString);
 
-    void clic();
+    void on_btn1_clicked();
+    void on_btn2_clicked();
 
 private:
     Ui::FenPrincipale *ui;

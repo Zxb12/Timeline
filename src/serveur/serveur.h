@@ -14,14 +14,14 @@ namespace Serveur
 {
 
 class Client;
-const quint8 filesystemVersion = 5;
+const quint8 filesystemVersion = 6;
 
 struct FileHeader
 {
     QString nomReel;
     quint16 noSauvegarde, noVersion;
     QDateTime derniereModif;
-    bool estUnDossier;
+    bool estUnDossier, supprime;
 
     bool operator==(const FileHeader &other) { return nomReel == other.nomReel; }
 };
@@ -50,13 +50,14 @@ public:
     quint16 start(QDir, quint16);
 
     //Handlers
-    void handleHello(Paquet *, Client *);
-    void handleServerSide(Paquet *, Client *);
-    void handleNewBackup(Paquet *, Client *);
-    void handleInitiateTransfer(Paquet *, Client *);
-    void handleFinishTransfer(Paquet *, Client *);
-    void handleCancelTransfer(Paquet *, Client *);
-    void handleFileData(Paquet *, Client *);
+    void handleHello(Paquet*, Client*);
+    void handleServerSide(Paquet*, Client*);
+    void handleNewBackup(Paquet*, Client*);
+    void handleInitiateTransfer(Paquet*, Client*);
+    void handleFinishTransfer(Paquet*, Client*);
+    void handleCancelTransfer(Paquet*, Client*);
+    void handleFileData(Paquet*, Client*);
+    void handleDeleteFile(Paquet*, Client*);
 
 public slots:
     void creerFichierTest();
