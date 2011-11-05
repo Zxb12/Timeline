@@ -118,6 +118,10 @@ void Client::nouvelleSauvegarde()
 
 void Client::envoie(QFileInfo &fichier)
 {
+    //Si un transfert est déjà en cours, on quitte !
+    if (m_transfertEnCours)
+        return;
+
     //Si le fichier est un dossier, m_fichier = 0
     if (fichier.isFile())
     {
@@ -193,6 +197,13 @@ void Client::handleError(Paquet *in)
 
         //Impossible de continuer, on se déconnecte
         m_socket->abort();
+        break;
+    }
+    case SERR_TRANSFER_IN_PROGESS:
+    {
+        console("Il y a déjà un transfert en cours !");
+        if (m_fichier && !m_transfertEnCours) //On désalloue le fichier si aucun transfert n'a effectivement commencé
+            delete m_fichier;
         break;
     }
     default:

@@ -33,7 +33,7 @@ FileDescription &FileDescription::operator=(const FileHeader &other)
 }
 
 Serveur::Serveur(QObject *parent) :
-    QObject(parent), m_stockage(), m_idFichier(0), m_noSauvegarde(0), m_cache()
+    QObject(parent), m_stockage(), m_idFichier(0), m_transfertEnCours(false), m_noSauvegarde(0), m_cache()
 {
     m_serveur = new QTcpServer(this);
 
@@ -415,6 +415,14 @@ void Serveur::handleNewBackup(Paquet *, Client *)
 
 void Serveur::handleInitiateTransfer(Paquet *in, Client *client)
 {
+    //On vérifie si l'on n'a pas déjà un transfert en cours
+    if (m_transfertEnCours)
+    {
+        Paquet out;
+        out << SMSG_ERROR << SERR_TRANSFER_IN_PROGESS;
+        out >> client;
+        return;
+    }
     //Extraction du header
     FileHeader header;
     *in >> header.nomReel;

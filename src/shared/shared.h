@@ -8,7 +8,8 @@
 
 enum Error
 {
-    SERR_INVALID_VERSION = 0
+    SERR_INVALID_VERSION = 0,
+    SERR_TRANSFER_IN_PROGESS
 };
 
 enum OpCodeValues
