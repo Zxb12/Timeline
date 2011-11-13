@@ -17,7 +17,9 @@ SOURCES  += src/main.cpp \
     src/serveur/opcode_s.cpp \
     src/serveur/client_s.cpp \
     src/shared/paquet.cpp \
-    src/ui/fenprincipale.cpp
+    src/ui/fenprincipale.cpp \
+    src/serveur/cache.cpp \
+    src/serveur/defines.cpp
 
 HEADERS  += src/client/opcode_c.h \
     src/client/client_c.h \
@@ -26,6 +28,12 @@ HEADERS  += src/client/opcode_c.h \
     src/serveur/client_s.h \
     src/shared/shared.h \
     src/shared/paquet.h \
-    src/ui/fenprincipale.h
+    src/ui/fenprincipale.h \
+    src/serveur/cache.h \
+    src/serveur/defines.h
 
 FORMS    += src/ui/fenprincipale.ui
+
+
+
+

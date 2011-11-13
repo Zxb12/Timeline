@@ -199,6 +199,11 @@ void Client::handleError(Paquet *in)
         m_socket->abort();
         break;
     }
+    case SERR_COULDNT_CREATE_FILE:
+    {
+        console("Le serveur n'a pas pu créer le fichier pour le transfert");
+        break;
+    }
     case SERR_TRANSFER_IN_PROGESS:
     {
         console("Il y a déjà un transfert en cours !");

@@ -8,41 +8,18 @@
 namespace Serveur
 {
 
-CacheEntry &CacheEntry::operator=(const FileHeader &other)
-{
-    nomReel = other.nomReel;
-    noSauvegarde = other.noSauvegarde;
-    noVersion = other.noVersion;
-    estUnDossier = other.estUnDossier;
-    supprime = other.supprime;
-    derniereModif = other.derniereModif;
-
-    return *this;
-}
-
-FileDescription &FileDescription::operator=(const FileHeader &other)
-{
-    nomReel = other.nomReel;
-    noSauvegarde = other.noSauvegarde;
-    noVersion = other.noVersion;
-    estUnDossier = other.estUnDossier;
-    supprime = other.supprime;
-    derniereModif = other.derniereModif;
-
-    return *this;
-}
-
 Serveur::Serveur(QObject *parent) :
-    QObject(parent), m_stockage(), m_idFichier(0), m_transfertEnCours(false), m_noSauvegarde(0), m_cache()
+    QObject(parent), m_stockage(), m_transfertEnCours(false), m_cache(this)
 {
     m_serveur = new QTcpServer(this);
 
     connect(m_serveur, SIGNAL(newConnection()), this, SLOT(clientConnecte()));
+    connect(&m_cache, SIGNAL(consoleOut(QString)), this, SLOT(console(QString)));
 }
 
 Serveur::~Serveur()
 {
-    sauveCache();
+    m_cache.sauveCache();
 }
 
 void Serveur::console(const QString &msg)
@@ -60,219 +37,38 @@ quint16 Serveur::start(QDir stockage, quint16 port = 0)
         return 0;
     }
 
-    //Chargement du cache
-    chargeCache();
-
     //Création du dossier de stockage si besoin
     if (!m_stockage.exists())
         m_stockage.mkdir(m_stockage.absolutePath());
+
+    //Chargement du cache
+    m_cache.changeDossier(m_stockage);
+    m_cache.chargeCache();
 
     console("Serveur démarré (hôte: " + m_serveur->serverAddress().toString() + ", port:" + nbr(m_serveur->serverPort()) + ")");
 
     return m_serveur->serverPort();
 }
 
-void Serveur::creerFichierTest()
+void Serveur::debuteTransfert(FileHeader &header, Client *client)
 {
-    console("Création d'un fichier de test: " + QString::number(m_idFichier, 36));
+    //Génération des versions et ouverture du fichier
+    CacheEntry entry = m_cache.nouveauFichier(header.nomReel);
+    header.noSauvegarde = entry.noSauvegarde;
+    header.noVersion = entry.noSauvegarde;
+    m_fichierEnTransfert.fichier = new QFile(entry.nomFichier, this);
 
-    FileHeader header;
-    header.nomReel = "C:/dossier/fichier.txt";
-    header.noSauvegarde = m_idFichier;
-    header.noVersion = (m_idFichier + 1) / 2;
-    header.derniereModif = QDateTime::currentDateTime();
-    header.estUnDossier = false;
-    header.supprime = false;
-
-    debuteTransfert(header);
-    termineTransfert();
-}
-
-void Serveur::chargeCache()
-{
-    QFile cache(m_stockage.absolutePath() + "/" CACHE);
-    m_cache.clear();
-
-    //On vérifie que le cache existe
-    if (!cache.exists())
-    {
-        reconstruireCache();
-        return;
-    }
-
-    if (!cache.open(QIODevice::ReadOnly))
-    {
-        console("Impossible d'ouvrir le fichier de cache. CODE A METTRE A JOUR");
-        return;
-    }
-
-    //Extraction de la version du cache
-    QDataStream stream(&cache);
-    quint8 version;
-    stream >> version;
-
-    //Vérification de la version du cache
-    if (version != filesystemVersion)
-    {
-        console("Cache obsolète...");
-        cache.close();
-        reconstruireCache();
-        return;
-    }
-
-    //Récupération des infos du cache
-    stream >> m_idFichier >> m_noSauvegarde;
-    while (!stream.atEnd())
-    {
-        CacheEntry entry;
-        stream >> entry.nomFichier >> entry.nomReel >> entry.noSauvegarde >> entry.noVersion >> entry.derniereModif
-               >> entry.estUnDossier >> entry.supprime;
-        ajouteAuCache(entry);
-        console("Cache: " + entry.nomReel + "(" + entry.nomFichier + "), sauv: " + nbr(entry.noSauvegarde) + ", vers: " + nbr(entry.noVersion));
-    }
-    cache.close();
-}
-
-void Serveur::sauveCache()
-{
-    //Ouverture du cache
-    QFile cache(m_stockage.absolutePath() + "/" CACHE);
-    if (!cache.open(QIODevice::WriteOnly | QIODevice::Truncate))
-    {
-        console("Impossible de sauvegarder le cache: " + cache.errorString());
-        return;
-    }
-
-    //Ecriture du cache
-    QDataStream stream(&cache);
-    stream << filesystemVersion << m_idFichier << m_noSauvegarde;
-    foreach (CacheEntry entry, m_cache)
-    {
-        stream << entry.nomFichier << entry.nomReel << entry.noSauvegarde << entry.noVersion << entry.derniereModif
-               << entry.estUnDossier << entry.supprime;
-    }
-}
-
-void Serveur::reconstruireCache()
-{
-    console("Reconstruction du cache...");
-
-    QString cachePath = m_stockage.absolutePath() + "/" CACHE;
-    QString oldCachePath = cachePath + ".old";
-    QFile cache(cachePath);
-    m_idFichier = 0;
-    m_noSauvegarde = 0;
-
-    //Suppression du cache si nécessaire
-    if (cache.exists())
-    {
-        if (QFile::exists(oldCachePath))
-            cache.remove(oldCachePath);
-        cache.rename(oldCachePath);
-        cache.setFileName(cachePath); //On remet le nom du fichier à sa valeur originale (elle a changé lors du renommage)
-    }
-
-    //Génération des entrées du cache
-    QDirIterator itr(m_stockage.absolutePath(), QStringList("_*.tlf"), QDir::Files);
-    while (itr.hasNext())
-    {
-        itr.next();
-        console("Fichier trouvé: " + itr.fileName());
-
-        //Extraction du No de fichier
-        QString fileName = itr.fileName();
-        fileName.remove(0, 1);
-        fileName.remove(".tlf");
-
-        m_idFichier = qMax(m_idFichier, fileName.toULongLong(0, 36));
-
-        //Création de l'entrée de cache.
-        QFile file(itr.filePath());
-        if (!file.open(QIODevice::ReadOnly))
-        {
-            console("Impossible d'ouvrir le fichier: " + file.errorString());
-            continue;
-        }
-
-        //Vérification de la version du fichier
-        QDataStream fileStream(&file);
-        quint8 octetEnTete, version;
-        fileStream >> octetEnTete;
-        version = octetEnTete >> 2; //On décale les bits à droite pour effacer les bits dossier et supprimé.
-        if (version != filesystemVersion)
-        {
-            console("Fichier d'une ancienne version(" + nbr(version) + ")");
-            continue;
-        }
-
-        //Ajout dans le cache
-        CacheEntry entry;
-        entry.nomFichier = itr.fileName();
-        entry.estUnDossier = octetEnTete & (1 << 1);
-        entry.supprime = octetEnTete & 1;
-        fileStream >> entry.nomReel >> entry.noSauvegarde >> entry.noVersion >> entry.derniereModif;
-        ajouteAuCache(entry);
-
-        //Vérification du No de sauvegarde
-        m_noSauvegarde = qMax(m_noSauvegarde, entry.noSauvegarde);
-    }
-    cache.close();
-
-    //On incrémente l'ID de fichier pour qu'il corresponde au prochain fichier
-    m_idFichier++;
-
-    console("Reconstruction terminée");
-    sauveCache();
-}
-
-void Serveur::ajouteAuCache(const CacheEntry &entry)
-{
-    //Recherche du fichier dans le cache
-    int index = m_cache.indexOf(entry);
-
-    //Si le fichier n'est pas dans le cache, on l'y ajoute
-    if (index == -1)
-    {
-        m_cache << entry;
-    }
-    //Sinon, on met à jour le fichier dans le cache
-    else
-    {
-        if (entry.noVersion > m_cache[index].noVersion)
-        {
-            Q_ASSERT(entry.noSauvegarde >= m_cache[index].noSauvegarde);
-            m_cache[index] = entry;
-        }
-    }
-}
-
-quint16 Serveur::noNouvelleVersion(const QString &fichier)
-{
-    //Recherche le no de version du prochain fichier pour le transfert.
-    foreach(CacheEntry entry, m_cache)
-    {
-        if (entry.nomReel == fichier)
-            return entry.noVersion + 1;
-    }
-    return 0;
-}
-
-void Serveur::creeFichierDeTransfert()
-{
-    //Génération du fichier
-    QString nbr = QString::number(m_idFichier, 36);
-    QString nomFichier = "_" + QString("0").repeated(13 - nbr.size()) + nbr + ".tlf";
-    m_fichierEnTransfert.fichier = new QFile(m_stockage.absolutePath() + "/" + nomFichier, this);
     if (!m_fichierEnTransfert.fichier->open(QIODevice::WriteOnly))
     {
-        console("Impossible d'ouvrir/créer le fichier " + nomFichier);
+        console("Impossible d'ouvrir/créer le fichier " + entry.nomFichier);
+        delete m_fichierEnTransfert.fichier;
+
+        //Notification du client
+        Paquet out;
+        out << SMSG_ERROR << SERR_COULDNT_CREATE_FILE;
+        out >> client;
         return;
     }
-}
-
-void Serveur::debuteTransfert(const FileHeader &header)
-{
-    creeFichierDeTransfert();
 
     //Ecriture de l'en-tête.
     QDataStream stream(m_fichierEnTransfert.fichier);
@@ -289,14 +85,13 @@ void Serveur::termineTransfert()
     CacheEntry entry;
     entry = m_fichierEnTransfert;
     entry.nomFichier = m_fichierEnTransfert.fichier->fileName();
-    ajouteAuCache(entry);
+    m_cache.ajoute(entry);
 
     //Fermeture du fichier et fin du transfert
     m_fichierEnTransfert.fichier->close();
     delete m_fichierEnTransfert.fichier;
     m_fichierEnTransfert.fichier = 0;
     m_transfertEnCours = false;
-    m_idFichier++;
 }
 
 void Serveur::annuleTransfert()
@@ -410,7 +205,7 @@ void Serveur::handleNewBackup(Paquet *, Client *)
     console("Nouvel indice de sauvegarde");
 
     //Incrémente le no de sauvegarde pour créer la nouvelle sauvegarde
-    m_noSauvegarde++;
+    m_cache.nouvelleSauvegarde();
 }
 
 void Serveur::handleInitiateTransfer(Paquet *in, Client *client)
@@ -431,11 +226,9 @@ void Serveur::handleInitiateTransfer(Paquet *in, Client *client)
 
     //Complétion du header avec les données de sauvegarde
     header.supprime = false;
-    header.noSauvegarde = m_noSauvegarde;
-    header.noVersion = noNouvelleVersion(header.nomReel);
 
     //Débute le transfert
-    debuteTransfert(header);
+    debuteTransfert(header, client);
 
     //Met à jour le statut de session
     client->setSessionState(TRANSFER);
@@ -491,13 +284,10 @@ void Serveur::handleDeleteFile(Paquet *in, Client *client)
 
     //Rempmlissage du header
     header.derniereModif = QDateTime();
-    console(nbr(header.derniereModif < QDateTime::currentDateTime()));
-    header.noSauvegarde = m_noSauvegarde;
-    header.noVersion = noNouvelleVersion(header.nomReel);
     header.supprime = true;
 
     //Suppression du fichier
-    debuteTransfert(header);
+    debuteTransfert(header, client);
     termineTransfert();
 
     //Notification de suppression

@@ -1,12 +1,13 @@
 #ifndef SERVEUR_H
 #define SERVEUR_H
 
+#include "src/serveur/defines.h"
+#include "src/serveur/cache.h"
+
 #include <QObject>
 #include <QTcpServer>
 #include <QDir>
 #include <QDateTime>
-
-#define CACHE "Timeline.cache"
 
 class Paquet;
 
@@ -14,31 +15,6 @@ namespace Serveur
 {
 
 class Client;
-const quint8 filesystemVersion = 6;
-
-struct FileHeader
-{
-    QString nomReel;
-    quint16 noSauvegarde, noVersion;
-    QDateTime derniereModif;
-    bool estUnDossier, supprime;
-
-    bool operator==(const FileHeader &other) { return nomReel == other.nomReel; }
-};
-
-struct CacheEntry : FileHeader
-{
-    QString nomFichier;
-
-    CacheEntry &operator=(const FileHeader &);
-};
-
-struct FileDescription : FileHeader
-{
-    QFile *fichier;
-
-    FileDescription &operator=(const FileHeader &);
-};
 
 class Serveur : public QObject
 {
@@ -59,9 +35,6 @@ public:
     void handleFileData(Paquet*, Client*);
     void handleDeleteFile(Paquet*, Client*);
 
-public slots:
-    void creerFichierTest();
-
 private:
     //Helpers cache
     void chargeCache();
@@ -71,11 +44,9 @@ private:
     quint16 noNouvelleVersion(const QString &);
 
     //Helpers transfert
-    void creeFichierDeTransfert();
-    void debuteTransfert(const FileHeader &);
+    void debuteTransfert(FileHeader &, Client *client);
     void termineTransfert();
     void annuleTransfert();
-    void supprimeFichier(const FileHeader &);
 
     //Helpers réseau
     void kick(Client *);
@@ -96,13 +67,11 @@ private:
 
     //Dossier de stockage
     QDir m_stockage;
-    quint64 m_idFichier;
     FileDescription m_fichierEnTransfert;
     bool m_transfertEnCours;
-    quint16 m_noSauvegarde;
 
     //Cache de fichiers
-    QList<CacheEntry> m_cache;
+    Cache m_cache;
 };
 
 }
