@@ -53,7 +53,7 @@ private slots:
 private:
     //Socket
     QTcpSocket *m_socket;
-    quint16 m_taillePaquet;
+    quint32 m_taillePaquet;
 
     //Transfert
     QFile *m_fichier;

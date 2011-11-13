@@ -32,7 +32,7 @@ public slots:
 
 private:
     QTcpSocket *m_socket;
-    quint16 m_taillePaquet;
+    quint32 m_taillePaquet;
 
     SessionState m_sessionState;
 };

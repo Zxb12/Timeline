@@ -5,7 +5,7 @@
 Paquet::Paquet() : m_paquet(), m_stream(&m_paquet, QIODevice::ReadWrite)
 {
     //On alloue la place pour la taille du paquet.
-    m_stream << (quint16) 0;
+    m_stream << (quint32) 0;
 }
 
 Paquet::Paquet(QByteArray paquet) : m_paquet(paquet), m_stream(&m_paquet, QIODevice::ReadWrite)
@@ -137,7 +137,7 @@ bool Paquet::operator>>(QTcpSocket *socket)
     if (socket && socket->isWritable())
     {       //On calcule la taille du paquet et on l'envoie.
         m_stream.device()->seek(0);
-        m_stream << (quint16) (m_paquet.size() - sizeof(quint16));
+        m_stream << (quint32) (m_paquet.size() - sizeof(quint32));
         socket->write(m_paquet);
 
         return true;
@@ -150,5 +150,5 @@ void Paquet::clear()
 {
     m_stream.device()->seek(0);
     m_paquet.clear();
-    m_stream << (quint16) 0;
+    m_stream << (quint32) 0;
 }
