@@ -34,15 +34,9 @@ public:
     void handleCancelTransfer(Paquet*, Client*);
     void handleFileData(Paquet*, Client*);
     void handleDeleteFile(Paquet*, Client*);
+    void handleFileList(Paquet*, Client*);
 
 private:
-    //Helpers cache
-    void chargeCache();
-    void sauveCache();
-    void reconstruireCache();
-    void ajouteAuCache(const CacheEntry &);
-    quint16 noNouvelleVersion(const QString &);
-
     //Helpers transfert
     void debuteTransfert(FileHeader &, Client *client);
     void termineTransfert();

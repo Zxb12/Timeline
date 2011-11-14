@@ -24,6 +24,7 @@ private slots:
 
     void on_btn1_clicked();
     void on_btn2_clicked();
+    void on_btn3_clicked();
 
 private:
     Ui::FenPrincipale *ui;

@@ -19,8 +19,9 @@ OpCodeHandler OpCodeTable[NB_OPCODES] =
     {"SMSG_WAITING_FOR_DATA",               NEVER,       &Serveur::handleServerSide},
     {"SMSG_TRANSFER_COMPLETE",              NEVER,       &Serveur::handleServerSide},
     {"CMSG_DELETE_FILE",                    AUTHED,      &Serveur::handleDeleteFile},
-    {"SMSG_FILE_DELETED",                   NEVER,       &Serveur::handleServerSide}
-
+    {"SMSG_FILE_DELETED",                   NEVER,       &Serveur::handleServerSide},
+    {"CMSG_FILE_LIST",                      AUTHED,      &Serveur::handleFileList},
+    {"SMSG_FILE_LIST",                      NEVER,       &Serveur::handleServerSide}
 };
 
 }

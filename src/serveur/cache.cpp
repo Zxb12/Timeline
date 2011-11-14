@@ -174,7 +174,7 @@ CacheEntry Cache::nouveauFichier(const QString &nomFichier)
     if (index == -1)
         entry.noVersion = 0;
     else
-        entry.noVersion = liste.at(index).noVersion;
+        entry.noVersion = liste.at(index).noVersion + 1;
 
     return entry;
 }
@@ -189,7 +189,7 @@ bool Cache::existe(const QString &nomFichier, quint16 noSauvegarde)
 {
     QList<CacheEntry> liste = listeFichiers(noSauvegarde);
 
-    foreach (CacheEntry entry, liste)
+    foreach(CacheEntry entry, liste)
     {
         if (entry.nomFichier == nomFichier)
             return true;

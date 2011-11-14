@@ -23,6 +23,7 @@ public:
     void nouvelleSauvegarde();
     void envoie(QFileInfo &);
     void supprime(QString);
+    void recupereListeFichiers(quint16 = -1);
 
     //Handlers
     void handleClientSide(Paquet*);
@@ -32,6 +33,7 @@ public:
     void handleWaitingForData(Paquet*);
     void handleTransferComplete(Paquet*);
     void handleFileDeleted(Paquet*);
+    void handleFileList(Paquet*);
 
 signals:
     void consoleOut(QString);

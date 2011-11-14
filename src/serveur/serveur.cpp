@@ -55,7 +55,7 @@ void Serveur::debuteTransfert(FileHeader &header, Client *client)
     //Génération des versions et ouverture du fichier
     CacheEntry entry = m_cache.nouveauFichier(header.nomReel);
     header.noSauvegarde = entry.noSauvegarde;
-    header.noVersion = entry.noSauvegarde;
+    header.noVersion = entry.noVersion;
     m_fichierEnTransfert.fichier = new QFile(entry.nomFichier, this);
 
     if (!m_fichierEnTransfert.fichier->open(QIODevice::WriteOnly))
@@ -296,5 +296,23 @@ void Serveur::handleDeleteFile(Paquet *in, Client *client)
     out >> client;
 }
 
+void Serveur::handleFileList(Paquet *in, Client *client)
+{
+    //Récupération du No de sauvegarde pour lequel renvoyer la liste
+    quint16 noSauv;
+    *in >> noSauv;
+
+    QList<CacheEntry> liste;
+    liste = m_cache.listeFichiers(noSauv);
+
+    //Envoi de la liste
+    Paquet out;
+    out << SMSG_FILE_LIST << (quint32) liste.size();
+    foreach(CacheEntry entry, liste)
+    {
+        out << entry.nomReel << entry.noSauvegarde << entry.noVersion << entry.derniereModif << entry.estUnDossier;
+    }
+    out >> client;
+}
 
 }

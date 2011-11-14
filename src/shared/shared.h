@@ -3,7 +3,7 @@
 
 #define VERSION "0.0.1a"
 #define TIMELINE_PORT 50182
-
+#define MAX_PACKET_SIZE 256 * 1024 //Taille maximum des données dans FILE_DATA
 #define nbr(x) QString::number(x)
 
 enum Error
@@ -27,9 +27,11 @@ enum OpCodeValues
     SMSG_WAITING_FOR_DATA,
     SMSG_TRANSFER_COMPLETE,
     CMSG_DELETE_FILE,
-    SMSG_FILE_DELETED
+    SMSG_FILE_DELETED,
+    CMSG_FILE_LIST,
+    SMSG_FILE_LIST
 };
 
-#define NB_OPCODES 13
+#define NB_OPCODES 15
 
 #endif // SHARED_H

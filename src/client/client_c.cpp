@@ -148,6 +148,14 @@ void Client::supprime(QString adresse)
     out >> m_socket;
 }
 
+void Client::recupereListeFichiers(quint16 noSauvegarde)
+{
+    console("Récupération de la liste des fichiers");
+    Paquet out;
+    out << CMSG_FILE_LIST << noSauvegarde;
+    out >> m_socket;
+}
+
 void Client::donneesEcrites()
 {
     console("Données écrites, restant en buffer: " + nbr(m_socket->bytesToWrite()));
@@ -161,7 +169,7 @@ void Client::envoiePaquet()
 {
 
     //On envoie un fichier
-    QByteArray data = m_fichier->read(60000);
+    QByteArray data = m_fichier->read(MAX_PACKET_SIZE);
 
     Paquet out;
     out << CMSG_FILE_DATA << data;
@@ -240,10 +248,26 @@ void Client::handleTransferComplete(Paquet *)
     m_fichier = 0;
 }
 
-void Client::handleFileDeleted(Paquet*)
+void Client::handleFileDeleted(Paquet *)
 {
     console("Fichier supprimé du serveur.");
 }
 
+void Client::handleFileList(Paquet *in)
+{
+    quint32 nbFichiers;
+    *in >> nbFichiers;
+
+    for (quint32 i = 0; i < nbFichiers; i++)
+    {
+        QString nomFichier;
+        quint16 noSauv, noVers;
+        QDateTime dateModif;
+        bool dossier;
+
+        *in >> nomFichier >> noSauv >> noVers >> dateModif >> dossier;
+        console(" --> " + nomFichier + ", sauv: " + nbr(noSauv) + ", vers: " + nbr(noVers) + ", dossier? " + nbr(dossier) + ", modif: " + dateModif.toString());
+    }
+}
 
 }

@@ -3,6 +3,7 @@
 
 #include <QTime>
 #include <QDir>
+#include <QFileDialog>
 
 FenPrincipale::FenPrincipale(QWidget *parent) :
     QMainWindow(parent), ui(new Ui::FenPrincipale)
@@ -40,7 +41,10 @@ void FenPrincipale::consoleServeur(QString msg)
 
 void FenPrincipale::on_btn1_clicked()
 {
-    QFileInfo file("E:/Musique.mp3");
+    QString fileName = QFileDialog::getOpenFileName(this);
+    if (fileName.isEmpty())
+        return;
+    QFileInfo file(fileName);
     m_client->nouvelleSauvegarde();
     m_client->envoie(file);
 }
@@ -48,4 +52,9 @@ void FenPrincipale::on_btn1_clicked()
 void FenPrincipale::on_btn2_clicked()
 {
     m_client->supprime("E:/Musique.mp3");
+}
+
+void FenPrincipale::on_btn3_clicked()
+{
+    m_client->recupereListeFichiers();
 }

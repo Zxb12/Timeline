@@ -3,7 +3,7 @@
 namespace Serveur
 {
 
-CacheEntry &CacheEntry::operator=(const FileHeader &other)
+FileDescription &FileDescription::operator=(const FileHeader &other)
 {
     nomReel = other.nomReel;
     noSauvegarde = other.noSauvegarde;
@@ -15,7 +15,7 @@ CacheEntry &CacheEntry::operator=(const FileHeader &other)
     return *this;
 }
 
-FileDescription &FileDescription::operator=(const FileHeader &other)
+CacheEntry &CacheEntry::operator=(const FileHeader &other)
 {
     nomReel = other.nomReel;
     noSauvegarde = other.noSauvegarde;
