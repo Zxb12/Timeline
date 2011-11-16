@@ -19,6 +19,12 @@ Client::Client(QObject *parent) :
     connect(m_socket, SIGNAL(error(QAbstractSocket::SocketError)),          this, SLOT(erreurSocket(QAbstractSocket::SocketError)));
 }
 
+Client::~Client()
+{
+    if (m_socket->isOpen())
+        m_socket->disconnectFromHost();
+}
+
 void Client::console(const QString &msg)
 {
     emit consoleOut(msg);
@@ -39,6 +45,14 @@ void Client::connecte()
 void Client::deconnecte()
 {
     console("Déconnecté du serveur.");
+
+    if (m_etatTransfert == SERVEUR_VERS_CLIENT)
+    {
+        m_fichier->remove();
+        delete m_fichier;
+        m_fichier = 0;
+        m_etatTransfert = AUCUN_TRANSFERT;
+    }
 }
 
 void Client::donneesRecues()
@@ -292,13 +306,13 @@ void Client::handleFileList(Paquet *in)
 
     for (quint32 i = 0; i < nbFichiers; i++)
     {
-        QString nomFichier;
+        QString nomClient;
         quint16 noSauv, noVers;
         QDateTime dateModif;
         bool dossier;
 
-        *in >> nomFichier >> noSauv >> noVers >> dateModif >> dossier;
-        console(" --> " + nomFichier + ", sauv: " + nbr(noSauv) + ", vers: " + nbr(noVers) + ", dossier? " + nbr(dossier) + ", modif: " + dateModif.toString());
+        *in >> nomClient >> noSauv >> noVers >> dateModif >> dossier;
+        console(" --> " + nomClient + ", sauv: " + nbr(noSauv) + ", vers: " + nbr(noVers) + ", dossier? " + nbr(dossier) + ", modif: " + dateModif.toString());
     }
 }
 

@@ -12,12 +12,12 @@ const quint8 filesystemVersion = 6;
 
 struct FileHeader
 {
-    QString nomReel;
+    QString nomClient;
     quint16 noSauvegarde, noVersion;
     QDateTime derniereModif;
     bool estUnDossier, supprime;
 
-    bool operator==(const FileHeader &other) { return nomReel == other.nomReel; }
+    bool operator==(const FileHeader &other) { return nomClient == other.nomClient; }
 };
 
 struct FileDescription : FileHeader
@@ -29,7 +29,7 @@ struct FileDescription : FileHeader
 
 struct CacheEntry : FileHeader
 {
-    QString nomFichier;
+    QString nomServeur;
 
     CacheEntry &operator=(const FileHeader &);
 };
