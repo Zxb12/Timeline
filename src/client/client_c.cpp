@@ -9,7 +9,7 @@ namespace Client
 {
 
 Client::Client(QObject *parent) :
-    QObject(parent), m_taillePaquet(0), m_fichier(0), m_transfertEnCours(false)
+    QObject(parent), m_taillePaquet(0), m_fichier(0), m_etatTransfert(AUCUN_TRANSFERT)
 {
     m_socket = new QTcpSocket(this);
     connect(m_socket, SIGNAL(readyRead()),                                  this, SLOT(donneesRecues()));
@@ -116,10 +116,10 @@ void Client::nouvelleSauvegarde()
     out >> m_socket;
 }
 
-void Client::envoie(QFileInfo &fichier)
+void Client::envoie(const QFileInfo &fichier)
 {
     //Si un transfert est déjà en cours, on quitte !
-    if (m_transfertEnCours)
+    if (m_etatTransfert)
         return;
 
     //Si le fichier est un dossier, m_fichier = 0
@@ -140,7 +140,7 @@ void Client::envoie(QFileInfo &fichier)
     out >> m_socket;
 }
 
-void Client::supprime(QString adresse)
+void Client::supprime(const QString &adresse)
 {
     //Supprime un fichier du serveur
     Paquet out;
@@ -148,7 +148,7 @@ void Client::supprime(QString adresse)
     out >> m_socket;
 }
 
-void Client::recupereListeFichiers(quint16 noSauvegarde)
+void Client::listeFichiers(quint16 noSauvegarde)
 {
     console("Récupération de la liste des fichiers");
     Paquet out;
@@ -156,19 +156,41 @@ void Client::recupereListeFichiers(quint16 noSauvegarde)
     out >> m_socket;
 }
 
+void Client::recupereFichier(const QString &fichierDistant, const QString &fichierLocal, quint16 noSauvegarde)
+{
+    //Vérifications
+    if (m_etatTransfert != AUCUN_TRANSFERT)
+    {
+        console("Un transfert est déjà en cours, impossible de récupérer le fichier");
+        return;
+    }
+
+    //Ouverture du fichier local
+    m_fichier = new QFile(fichierLocal, this);
+    if (!m_fichier->open(QIODevice::WriteOnly | QIODevice::Truncate))
+    {
+        console("Impossible de créer le fichier local " + fichierLocal);
+        delete m_fichier;
+        m_fichier = 0;
+        return;
+    }
+
+    //Fichier ouvert, on peut commencer le transfert
+    Paquet out;
+    out << CMSG_RECOVER_FILE << fichierDistant << noSauvegarde;
+    out >> m_socket;
+    m_etatTransfert = SERVEUR_VERS_CLIENT;
+}
+
 void Client::donneesEcrites()
 {
-    console("Données écrites, restant en buffer: " + nbr(m_socket->bytesToWrite()));
-
     //Si l'on est en transfert et que le paquet précédent a été complètement écrit, on écrit le suivant
-    if (m_socket->bytesToWrite() == 0 && m_transfertEnCours)
+    if (m_socket->bytesToWrite() == 0 && m_etatTransfert == CLIENT_VERS_SERVEUR)
         envoiePaquet();
 }
 
 void Client::envoiePaquet()
 {
-
-    //On envoie un fichier
     QByteArray data = m_fichier->read(MAX_PACKET_SIZE);
 
     Paquet out;
@@ -181,7 +203,7 @@ void Client::envoiePaquet()
         out.clear();
         out << CMSG_FINISH_TRANSFER;
         out >> m_socket;
-        m_transfertEnCours = false;
+        m_etatTransfert = AUCUN_TRANSFERT;
     }
 }
 
@@ -212,11 +234,21 @@ void Client::handleError(Paquet *in)
         console("Le serveur n'a pas pu créer le fichier pour le transfert");
         break;
     }
+    case SERR_COULDNT_OPEN_FILE:
+    {
+        console("Le serveur n'a pas pu ouvrir le fichier sauvegardé");
+        break;
+    }
     case SERR_TRANSFER_IN_PROGESS:
     {
         console("Il y a déjà un transfert en cours !");
-        if (m_fichier && !m_transfertEnCours) //On désalloue le fichier si aucun transfert n'a effectivement commencé
+        if (m_fichier && !m_etatTransfert == CLIENT_VERS_SERVEUR) //On désalloue le fichier si aucun transfert n'a effectivement commencé
             delete m_fichier;
+        break;
+    }
+    case SERR_FILE_DOESNT_EXIST:
+    {
+        console("Le fichier n'existe pas sur le serveur.");
         break;
     }
     default:
@@ -238,7 +270,7 @@ void Client::handleHello(Paquet *)
 void Client::handleWaitingForData(Paquet *)
 {
     console("Serveur prêt à recevoir les données");
-    m_transfertEnCours = true;
+    m_etatTransfert = CLIENT_VERS_SERVEUR;
     envoiePaquet();
 }
 
@@ -268,6 +300,29 @@ void Client::handleFileList(Paquet *in)
         *in >> nomFichier >> noSauv >> noVers >> dateModif >> dossier;
         console(" --> " + nomFichier + ", sauv: " + nbr(noSauv) + ", vers: " + nbr(noVers) + ", dossier? " + nbr(dossier) + ", modif: " + dateModif.toString());
     }
+}
+
+void Client::handleFinishTransfer(Paquet *)
+{
+    m_fichier->close();
+    delete m_fichier;
+    m_fichier = 0;
+    m_etatTransfert = AUCUN_TRANSFERT;
+}
+
+void Client::handleCancelTransfer(Paquet *)
+{
+    m_fichier->remove();
+    delete m_fichier;
+    m_fichier = 0;
+    m_etatTransfert = AUCUN_TRANSFERT;
+}
+
+void Client::handleFileData(Paquet *in)
+{
+    QByteArray data;
+    *in >> data;
+    m_fichier->write(data);
 }
 
 }

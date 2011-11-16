@@ -1,6 +1,5 @@
 #include "src/serveur/serveur.h"
 #include "src/serveur/client_s.h"
-#include "src/shared/shared.h"
 #include "src/shared/paquet.h"
 
 #include <QDirIterator>
@@ -9,7 +8,7 @@ namespace Serveur
 {
 
 Serveur::Serveur(QObject *parent) :
-    QObject(parent), m_stockage(), m_transfertEnCours(false), m_cache(this)
+    QObject(parent), m_stockage(), m_etatTransfert(AUCUN_TRANSFERT), m_cache(this)
 {
     m_serveur = new QTcpServer(this);
 
@@ -53,14 +52,14 @@ quint16 Serveur::start(QDir stockage, quint16 port = 0)
 void Serveur::debuteTransfert(FileHeader &header, Client *client)
 {
     //Génération des versions et ouverture du fichier
-    CacheEntry entry = m_cache.nouveauFichier(header.nomReel);
+    CacheEntry entry = m_cache.nouveauFichier(header.nomClient);
     header.noSauvegarde = entry.noSauvegarde;
     header.noVersion = entry.noVersion;
-    m_fichierEnTransfert.fichier = new QFile(entry.nomFichier, this);
+    m_fichierEnTransfert.fichier = new QFile(entry.nomServeur, this);
 
     if (!m_fichierEnTransfert.fichier->open(QIODevice::WriteOnly))
     {
-        console("Impossible d'ouvrir/créer le fichier " + entry.nomFichier);
+        console("Impossible d'ouvrir/créer le fichier " + entry.nomServeur);
         delete m_fichierEnTransfert.fichier;
 
         //Notification du client
@@ -73,10 +72,10 @@ void Serveur::debuteTransfert(FileHeader &header, Client *client)
     //Ecriture de l'en-tête.
     QDataStream stream(m_fichierEnTransfert.fichier);
     quint8 octetEnTete = (filesystemVersion << 2) | (header.estUnDossier << 1) | (header.supprime);
-    stream << octetEnTete << header.nomReel << header.noSauvegarde << header.noVersion << header.derniereModif;
+    stream << octetEnTete << header.nomClient << header.noSauvegarde << header.noVersion << header.derniereModif;
 
     m_fichierEnTransfert = header;
-    m_transfertEnCours = true;
+    m_etatTransfert = CLIENT_VERS_SERVEUR;
 }
 
 void Serveur::termineTransfert()
@@ -84,25 +83,43 @@ void Serveur::termineTransfert()
     //Ajoute l'entrée dans le cache
     CacheEntry entry;
     entry = m_fichierEnTransfert;
-    entry.nomFichier = m_fichierEnTransfert.fichier->fileName();
+    entry.nomServeur = m_fichierEnTransfert.fichier->fileName();
     m_cache.ajoute(entry);
 
     //Fermeture du fichier et fin du transfert
     m_fichierEnTransfert.fichier->close();
     delete m_fichierEnTransfert.fichier;
     m_fichierEnTransfert.fichier = 0;
-    m_transfertEnCours = false;
+    m_etatTransfert = AUCUN_TRANSFERT;
 }
 
 void Serveur::annuleTransfert()
 {
-    if (m_transfertEnCours)
+    if (m_etatTransfert == CLIENT_VERS_SERVEUR)
     {
         //Supprime le fichier
         m_fichierEnTransfert.fichier->remove();
         delete m_fichierEnTransfert.fichier;
         m_fichierEnTransfert.fichier = 0;
-        m_transfertEnCours = false;
+        m_etatTransfert = AUCUN_TRANSFERT;
+    }
+}
+
+void Serveur::envoiePaquet(Client *client)
+{
+    QByteArray data = m_fichierEnTransfert.fichier->read(MAX_PACKET_SIZE);
+
+    Paquet out;
+    out << SMSG_FILE_DATA << data;
+    out >> client;
+
+    //On vérifie si l'on a envoyé tout le fichier
+    if (m_fichierEnTransfert.fichier->atEnd())
+    {
+        out.clear();
+        out << SMSG_FINISH_TRANSFER;
+        out >> client;
+        m_etatTransfert = AUCUN_TRANSFERT;
     }
 }
 
@@ -112,6 +129,7 @@ void Serveur::clientConnecte()
     m_clients << client;
 
     connect(client, SIGNAL(paquetRecu(Paquet*)), this, SLOT(paquetRecu(Paquet*)));
+    connect(client, SIGNAL(paquetEcrit()), this, SLOT(paquetEcrit()));
     connect(client, SIGNAL(deconnecte()), this, SLOT(clientDeconnecte()));
 
     console("Client connecté: " + client->socket()->peerAddress().toString() + ":" + nbr(client->socket()->peerPort()));
@@ -158,6 +176,15 @@ void Serveur::paquetRecu(Paquet *in)
     }
 
     delete in;
+}
+
+void Serveur::paquetEcrit()
+{
+    Client *client = qobject_cast<Client *>(sender());
+
+    //Si l'on est en transfert et que le paquet précédent a été complètement écrit, on écrit le suivant
+    if (client && m_etatTransfert == SERVEUR_VERS_CLIENT)
+        envoiePaquet(client);
 }
 
 void Serveur::kick(Client *client)
@@ -211,7 +238,7 @@ void Serveur::handleNewBackup(Paquet *, Client *)
 void Serveur::handleInitiateTransfer(Paquet *in, Client *client)
 {
     //On vérifie si l'on n'a pas déjà un transfert en cours
-    if (m_transfertEnCours)
+    if (m_etatTransfert != AUCUN_TRANSFERT)
     {
         Paquet out;
         out << SMSG_ERROR << SERR_TRANSFER_IN_PROGESS;
@@ -220,7 +247,7 @@ void Serveur::handleInitiateTransfer(Paquet *in, Client *client)
     }
     //Extraction du header
     FileHeader header;
-    *in >> header.nomReel;
+    *in >> header.nomClient;
     *in >> header.estUnDossier;
     *in >> header.derniereModif;
 
@@ -279,7 +306,7 @@ void Serveur::handleDeleteFile(Paquet *in, Client *client)
 {
     //Extraction du fichier à supprimer
     FileHeader header;
-    *in >> header.nomReel;
+    *in >> header.nomClient;
     *in >> header.estUnDossier;
 
     //Rempmlissage du header
@@ -310,9 +337,73 @@ void Serveur::handleFileList(Paquet *in, Client *client)
     out << SMSG_FILE_LIST << (quint32) liste.size();
     foreach(CacheEntry entry, liste)
     {
-        out << entry.nomReel << entry.noSauvegarde << entry.noVersion << entry.derniereModif << entry.estUnDossier;
+        out << entry.nomClient << entry.noSauvegarde << entry.noVersion << entry.derniereModif << entry.estUnDossier;
     }
     out >> client;
 }
+
+void Serveur::handleRecoverFile(Paquet *in, Client *client)
+{
+    QString nomClient;
+    quint16 noSauvegarde;
+    *in >> nomClient >> noSauvegarde;
+
+    console("Le client veut récupérer " + nomClient);
+    QString nomServeur = m_cache.nomFichierReel(nomClient, noSauvegarde);
+
+    //On vérifie si l'on a trouvé le fichier
+    if (nomServeur.isEmpty())
+    {
+        console("Le fichier n'existe pas !");
+        Paquet out;
+        out << SMSG_ERROR << SERR_FILE_DOESNT_EXIST;
+        out >> client;
+        out.clear();
+        out << SMSG_CANCEL_TRANSFER;
+        out >> client;
+        return;
+    }
+
+    //On vérifie s'il n'y a pas déjà un transfert
+    if (m_etatTransfert != AUCUN_TRANSFERT)
+    {
+        console("Un transfert est déjà en cours !");
+        Paquet out;
+        out << SMSG_ERROR << SERR_TRANSFER_IN_PROGESS;
+        out >> client;
+        out.clear();
+        out << SMSG_CANCEL_TRANSFER;
+        out >> client;
+        return;
+    }
+
+    //On peut lancer le transfert
+    m_fichierEnTransfert.fichier = new QFile(nomServeur);
+    if (!m_fichierEnTransfert.fichier->open(QIODevice::ReadOnly))
+    {
+        console("Impossible d'ouvrir le fichier: " + m_fichierEnTransfert.fichier->errorString());
+        Paquet out;
+        out << SMSG_ERROR << SERR_COULDNT_OPEN_FILE;
+        out >> client;
+        out.clear();
+        out << SMSG_CANCEL_TRANSFER;
+        out >> client;
+
+        delete m_fichierEnTransfert.fichier;
+        m_fichierEnTransfert.fichier = 0;
+        return;
+    }
+
+    //Lecture de l'en-tête
+    m_etatTransfert = SERVEUR_VERS_CLIENT;
+    QDataStream stream(m_fichierEnTransfert.fichier);
+    stream.skipRawData(sizeof(quint8));
+    stream >> m_fichierEnTransfert.nomClient >> m_fichierEnTransfert.noSauvegarde >> m_fichierEnTransfert.noVersion
+           >> m_fichierEnTransfert.derniereModif;
+
+    envoiePaquet(client);
+
+}
+
 
 }

@@ -21,7 +21,11 @@ OpCodeHandler OpCodeTable[NB_OPCODES] =
     {"CMSG_DELETE_FILE",                    AUTHED,      &Serveur::handleDeleteFile},
     {"SMSG_FILE_DELETED",                   NEVER,       &Serveur::handleServerSide},
     {"CMSG_FILE_LIST",                      AUTHED,      &Serveur::handleFileList},
-    {"SMSG_FILE_LIST",                      NEVER,       &Serveur::handleServerSide}
+    {"SMSG_FILE_LIST",                      NEVER,       &Serveur::handleServerSide},
+    {"CMSG_RECOVER_FILE",                   AUTHED,      &Serveur::handleRecoverFile},
+    {"SMSG_FINISH_TRANSFER",                NEVER,       &Serveur::handleServerSide},
+    {"SMSG_CANCEL_TRANSFER",                NEVER,       &Serveur::handleServerSide},
+    {"SMSG_FILE_DATA",                      NEVER,       &Serveur::handleServerSide}
 };
 
 }

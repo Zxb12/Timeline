@@ -8,7 +8,7 @@ OpCodeHandler OpCodeTable[NB_OPCODES] =
 {
     {"CMSG_HELLO",                          NEVER,       &Client::handleClientSide},
     {"SMSG_HELLO",                          NOT_CHECKED, &Client::handleHello},
-    {"SMSG_ERROR",                          NOT_CHECKED, &Client::handleError},
+    {"SMSG_ERROR",                          ALWAYS,      &Client::handleError},
     {"SMSG_KICK",                           ALWAYS,      &Client::handleKick},
     {"CMSG_NEW_BACKUP",                     NEVER,       &Client::handleClientSide},
     {"CMSG_INITIATE_TRANSFER",              NEVER,       &Client::handleClientSide},
@@ -20,7 +20,11 @@ OpCodeHandler OpCodeTable[NB_OPCODES] =
     {"CMSG_DELETE_FILE",                    NEVER,       &Client::handleClientSide},
     {"SMSG_FILE_DELETED",                   AUTHED,      &Client::handleFileDeleted},
     {"CMSG_FILE_LIST",                      NEVER,       &Client::handleClientSide},
-    {"SMSG_FILE_LIST",                      AUTHED,      &Client::handleFileList}
+    {"SMSG_FILE_LIST",                      AUTHED,      &Client::handleFileList},
+    {"CMSG_RECOVER_FILE",                   NEVER,       &Client::handleClientSide},
+    {"SMSG_FINISH_TRANSFER",                TRANSFER,    &Client::handleFinishTransfer},
+    {"SMSG_CANCEL_TRANSFER",                TRANSFER,    &Client::handleCancelTransfer},
+    {"SMSG_FILE_DATA",                      TRANSFER,    &Client::handleFileData}
 };
 
 }

@@ -23,11 +23,13 @@ public:
     void setSessionState(SessionState state) { m_sessionState = state; }
 
 signals:
-    void deconnecte();
     void paquetRecu(Paquet*);
+    void paquetEcrit();
+    void deconnecte();
 
 public slots:
     void donneesRecues();
+    void donneesEcrites();
     void deconnexion();
 
 private:

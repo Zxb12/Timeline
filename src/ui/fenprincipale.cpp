@@ -51,10 +51,13 @@ void FenPrincipale::on_btn1_clicked()
 
 void FenPrincipale::on_btn2_clicked()
 {
-    m_client->supprime("E:/Musique.mp3");
+    QString fichierLocal = QFileDialog::getSaveFileName(this);
+    if (fichierLocal.isEmpty())
+        return;
+    m_client->recupereFichier("E:/Musique.mp3", fichierLocal);
 }
 
 void FenPrincipale::on_btn3_clicked()
 {
-    m_client->recupereListeFichiers();
+    m_client->listeFichiers();
 }

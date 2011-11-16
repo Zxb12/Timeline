@@ -21,9 +21,10 @@ public:
 
     //Envoi/réception de fichiers
     void nouvelleSauvegarde();
-    void envoie(QFileInfo &);
-    void supprime(QString);
-    void recupereListeFichiers(quint16 = -1);
+    void envoie(const QFileInfo &);
+    void supprime(const QString &);
+    void listeFichiers(quint16 = -1);
+    void recupereFichier(const QString &, const QString &, quint16 = -1);
 
     //Handlers
     void handleClientSide(Paquet*);
@@ -34,6 +35,9 @@ public:
     void handleTransferComplete(Paquet*);
     void handleFileDeleted(Paquet*);
     void handleFileList(Paquet*);
+    void handleFinishTransfer(Paquet*);
+    void handleCancelTransfer(Paquet*);
+    void handleFileData(Paquet*);
 
 signals:
     void consoleOut(QString);
@@ -59,7 +63,7 @@ private:
 
     //Transfert
     QFile *m_fichier;
-    bool m_transfertEnCours;
+    EtatTransfert m_etatTransfert;
 };
 
 }

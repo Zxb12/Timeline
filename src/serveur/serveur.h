@@ -1,6 +1,7 @@
 #ifndef SERVEUR_H
 #define SERVEUR_H
 
+#include "src/shared/shared.h"
 #include "src/serveur/defines.h"
 #include "src/serveur/cache.h"
 
@@ -35,12 +36,14 @@ public:
     void handleFileData(Paquet*, Client*);
     void handleDeleteFile(Paquet*, Client*);
     void handleFileList(Paquet*, Client*);
+    void handleRecoverFile(Paquet*, Client*);
 
 private:
     //Helpers transfert
     void debuteTransfert(FileHeader &, Client *client);
     void termineTransfert();
     void annuleTransfert();
+    void envoiePaquet(Client*);
 
     //Helpers réseau
     void kick(Client *);
@@ -53,6 +56,7 @@ private slots:
     void clientConnecte();
     void clientDeconnecte();
     void paquetRecu(Paquet *);
+    void paquetEcrit();
 
 private:
     //Serveur TCP-IP
@@ -62,7 +66,7 @@ private:
     //Dossier de stockage
     QDir m_stockage;
     FileDescription m_fichierEnTransfert;
-    bool m_transfertEnCours;
+    EtatTransfert m_etatTransfert;
 
     //Cache de fichiers
     Cache m_cache;

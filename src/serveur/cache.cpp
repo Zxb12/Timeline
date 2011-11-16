@@ -59,10 +59,10 @@ void Cache::chargeCache()
     while (!stream.atEnd())
     {
         CacheEntry entry;
-        stream >> entry.nomFichier >> entry.nomReel >> entry.noSauvegarde >> entry.noVersion >> entry.derniereModif
+        stream >> entry.nomServeur >> entry.nomClient >> entry.noSauvegarde >> entry.noVersion >> entry.derniereModif
                >> entry.estUnDossier >> entry.supprime;
         m_historique.append(entry);
-        console("Cache: " + entry.nomReel + "(" + entry.nomFichier + "), sauv: " + nbr(entry.noSauvegarde) + ", vers: " + nbr(entry.noVersion));
+        console("Cache: " + entry.nomClient + "(" + entry.nomServeur + "), sauv: " + nbr(entry.noSauvegarde) + ", vers: " + nbr(entry.noVersion));
     }
     cache.close();
 }
@@ -82,7 +82,7 @@ void Cache::sauveCache()
     stream << filesystemVersion << m_idFichier << m_noSauvegarde;
     foreach (CacheEntry entry, m_historique)
     {
-        stream << entry.nomFichier << entry.nomReel << entry.noSauvegarde << entry.noVersion << entry.derniereModif
+        stream << entry.nomServeur << entry.nomClient << entry.noSauvegarde << entry.noVersion << entry.derniereModif
                << entry.estUnDossier << entry.supprime;
     }
 }
@@ -141,10 +141,10 @@ void Cache::reconstruireCache()
 
         //Ajout dans le cache
         CacheEntry entry;
-        entry.nomFichier = itr.fileName();
+        entry.nomServeur = itr.fileName();
         entry.estUnDossier = octetEnTete & (1 << 1);
         entry.supprime = octetEnTete & 1;
-        fileStream >> entry.nomReel >> entry.noSauvegarde >> entry.noVersion >> entry.derniereModif;
+        fileStream >> entry.nomClient >> entry.noSauvegarde >> entry.noVersion >> entry.derniereModif;
         m_historique.append(entry);
 
         //Vérification du No de sauvegarde
@@ -159,13 +159,13 @@ void Cache::reconstruireCache()
     sauveCache();
 }
 
-CacheEntry Cache::nouveauFichier(const QString &nomFichier)
+CacheEntry Cache::nouveauFichier(const QString &nomClient)
 {
     //Génération du fichier
     CacheEntry entry;
     QString nbr = QString::number(m_idFichier, 36);
-    entry.nomFichier = m_dossier.absolutePath() + "/_" + QString("0").repeated(13 - nbr.size()) + nbr + ".tlf";
-    entry.nomReel = nomFichier;
+    entry.nomServeur = m_dossier.absolutePath() + "/_" + QString("0").repeated(13 - nbr.size()) + nbr + ".tlf";
+    entry.nomClient = nomClient;
     entry.noSauvegarde = m_noSauvegarde;
 
     //Recheche du No de version
@@ -185,26 +185,26 @@ void Cache::ajoute(const CacheEntry &entry)
     m_idFichier++;
 }
 
-bool Cache::existe(const QString &nomFichier, quint16 noSauvegarde)
+bool Cache::existe(const QString &nomClient, quint16 noSauvegarde)
 {
     QList<CacheEntry> liste = listeFichiers(noSauvegarde);
 
     foreach(CacheEntry entry, liste)
     {
-        if (entry.nomFichier == nomFichier)
+        if (entry.nomClient == nomClient)
             return true;
     }
     return false;
 }
 
-QString Cache::nomFichierReel(const QString &nomFichier, quint16 noSauvegarde)
+QString Cache::nomFichierReel(const QString &nomClient, quint16 noSauvegarde)
 {
     QList<CacheEntry> liste = listeFichiers(noSauvegarde);
 
     foreach(CacheEntry entry, liste)
     {
-        if (entry.nomFichier == nomFichier)
-            return entry.nomReel;
+        if (entry.nomClient == nomClient)
+            return entry.nomServeur;
     }
 
     return QString();

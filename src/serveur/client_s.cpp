@@ -9,6 +9,7 @@ Client::Client(QTcpSocket *socket, QObject *parent) : QObject(parent), m_socket(
 {
     connect(m_socket, SIGNAL(readyRead()), this, SLOT(donneesRecues()));
     connect(m_socket, SIGNAL(disconnected()), this, SLOT(deconnexion()));
+    connect(m_socket, SIGNAL(bytesWritten(qint64)), this, SLOT(donneesEcrites()));
 }
 
 Client::~Client()
@@ -44,6 +45,12 @@ void Client::donneesRecues()
     //S'il nous reste quelque chose dans la socket, on relance la fonction.
     if (m_socket->bytesAvailable())
         donneesRecues();
+}
+
+void Client::donneesEcrites()
+{
+    if (m_socket->bytesToWrite() == 0)
+        emit paquetEcrit();
 }
 
 void Client::deconnexion()
