@@ -132,34 +132,15 @@ void Client::nouvelleSauvegarde()
 
 void Client::envoie(const QFileInfo &fichier)
 {
-    //Si un transfert est déjà en cours, on quitte !
-    if (m_etatTransfert)
-        return;
-
-    //Si le fichier est un dossier, m_fichier = 0
-    if (fichier.isFile())
-    {
-        //Ouverture du fichier
-        m_fichier = new QFile(fichier.absoluteFilePath(), this);
-        if (!m_fichier->open(QIODevice::ReadOnly))
-        {
-            console("Impossible d'ouvrir le fichier " + fichier.filePath());
-            return;
-        }
-    }
-
-    //Début du transfert
-    Paquet out;
-    out << CMSG_INITIATE_TRANSFER << fichier.absoluteFilePath() << fichier.isDir() << fichier.lastModified();
-    out >> m_socket;
+    //On ajoute le fichier à la liste et on lance le transfert si nécessaire
+    m_listeTransfert.append(fichier);
+    if (m_etatTransfert == AUCUN_TRANSFERT)
+        debuteTransfert();
 }
 
 void Client::supprime(const QString &adresse)
 {
-    //Supprime un fichier du serveur
-    Paquet out;
-    out << CMSG_DELETE_FILE << adresse;
-    out >> m_socket;
+    m_listeSuppressions.append(adresse);
 }
 
 void Client::listeFichiers(quint16 noSauvegarde)
@@ -217,7 +198,60 @@ void Client::envoiePaquet()
         out.clear();
         out << CMSG_FINISH_TRANSFER;
         out >> m_socket;
-        m_etatTransfert = AUCUN_TRANSFERT;
+        m_etatTransfert = EN_ATTENTE; //On attend la notification de fin de transfert, il ne faut pas commencer le transfert suivant en attendant !
+    }
+}
+
+void Client::debuteTransfert()
+{
+    //Si un transfert est déjà en cours, on quitte !
+    if (m_etatTransfert != AUCUN_TRANSFERT)
+        return;
+
+    //Récupération du fichier suivant
+    if (m_listeTransfert.size() == 0)
+    {
+        supprimeSuivant();
+        console("Transferts terminés");
+        return;
+    }
+
+    QFileInfo fichier = m_listeTransfert.takeFirst();
+
+    //Si le fichier est un dossier, m_fichier = 0
+    if (fichier.isFile())
+    {
+        //Ouverture du fichier
+        m_fichier = new QFile(fichier.absoluteFilePath(), this);
+        if (!m_fichier->open(QIODevice::ReadOnly))
+        {
+            console("Impossible d'ouvrir le fichier " + fichier.filePath());
+            return;
+        }
+    }
+
+    console("Début du transfert de " + fichier.filePath());
+    QCoreApplication::processEvents();
+
+    //Début du transfert
+    Paquet out;
+    out << CMSG_INITIATE_TRANSFER << fichier.absoluteFilePath() << fichier.isDir() << fichier.lastModified();
+    out >> m_socket;
+    m_etatTransfert = EN_ATTENTE;
+}
+
+void Client::supprimeSuivant()
+{
+    if (!m_listeSuppressions.isEmpty())
+    {
+        //Supprime un fichier du serveur
+        Paquet out;
+        out << CMSG_DELETE_FILE << m_listeSuppressions.takeFirst();
+        out >> m_socket;
+    }
+    else
+    {
+        console("Suppressions terminées");
     }
 }
 
@@ -256,7 +290,7 @@ void Client::handleError(Paquet *in)
     case SERR_TRANSFER_IN_PROGESS:
     {
         console("Il y a déjà un transfert en cours !");
-        if (m_fichier && !m_etatTransfert == CLIENT_VERS_SERVEUR) //On désalloue le fichier si aucun transfert n'a effectivement commencé
+        if (m_fichier && m_etatTransfert == SERVEUR_VERS_CLIENT) //On désalloue le fichier si aucun transfert n'a effectivement commencé
             delete m_fichier;
         break;
     }
@@ -283,37 +317,45 @@ void Client::handleHello(Paquet *)
 
 void Client::handleWaitingForData(Paquet *)
 {
-    console("Serveur prêt à recevoir les données");
+    //Début effectif du transfert
     m_etatTransfert = CLIENT_VERS_SERVEUR;
     envoiePaquet();
 }
 
 void Client::handleTransferComplete(Paquet *)
 {
-    delete m_fichier;
-    m_fichier = 0;
+    if (m_fichier)
+    {
+        m_fichier->close();
+        delete m_fichier;
+        m_fichier = 0;
+    }
+    m_etatTransfert = AUCUN_TRANSFERT;
+    debuteTransfert();
 }
 
 void Client::handleFileDeleted(Paquet *)
 {
-    console("Fichier supprimé du serveur.");
+    supprimeSuivant();
 }
 
 void Client::handleFileList(Paquet *in)
 {
     quint32 nbFichiers;
     *in >> nbFichiers;
+    QList<FileHeader> liste;
+    liste.reserve(nbFichiers);
 
     for (quint32 i = 0; i < nbFichiers; i++)
     {
-        QString nomClient;
-        quint16 noSauv, noVers;
-        QDateTime dateModif;
-        bool dossier;
-
-        *in >> nomClient >> noSauv >> noVers >> dateModif >> dossier;
-        console(" --> " + nomClient + ", sauv: " + nbr(noSauv) + ", vers: " + nbr(noVers) + ", dossier? " + nbr(dossier) + ", modif: " + dateModif.toString());
+        //Extraction des informations
+        FileHeader header;
+        *in >> header.nomClient >> header.noSauvegarde >> header.noVersion >> header.derniereModif >> header.estUnDossier;
+        liste.append(header);
     }
+
+    //Envoi des données
+    emit listeRecue(liste);
 }
 
 void Client::handleFinishTransfer(Paquet *)

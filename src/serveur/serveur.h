@@ -40,10 +40,10 @@ public:
 
 private:
     //Helpers transfert
-    void debuteTransfert(FileHeader &, Client *client);
-    void termineTransfert();
-    void annuleTransfert();
-    void envoiePaquet(Client*);
+    void debuteTransfert(FileHeader &, Client *);
+    void termineTransfert(Client *);
+    void annuleTransfert(Client *);
+    void envoiePaquet(Client *);
 
     //Helpers réseau
     void kick(Client *);

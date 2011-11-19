@@ -1,10 +1,24 @@
 #ifndef SHARED_H
 #define SHARED_H
 
+#include <QDateTime>
+
 #define VERSION "0.0.1a"
 #define TIMELINE_PORT 50182
 #define MAX_PACKET_SIZE 256 * 1024 //Taille maximum des données dans FILE_DATA
 #define nbr(x) QString::number(x)
+
+struct FileHeader
+{
+    QString nomClient;
+    quint16 noSauvegarde, noVersion;
+    QDateTime derniereModif;
+    bool estUnDossier, supprime;
+
+    FileHeader() : nomClient(), noSauvegarde(0), noVersion(0), derniereModif(), estUnDossier(false), supprime(false) {}
+    FileHeader(const QString &nom) : nomClient(nom), noSauvegarde(0), noVersion(0), derniereModif(), estUnDossier(false), supprime(false) {}
+    bool operator==(const FileHeader &other) { return nomClient == other.nomClient; }
+};
 
 enum Error
 {
@@ -18,6 +32,7 @@ enum Error
 enum EtatTransfert
 {
     AUCUN_TRANSFERT = 0,
+    EN_ATTENTE,
     CLIENT_VERS_SERVEUR,
     SERVEUR_VERS_CLIENT
 };

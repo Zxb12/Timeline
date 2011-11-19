@@ -42,6 +42,7 @@ public:
 
 signals:
     void consoleOut(QString);
+    void listeRecue(QList<FileHeader>);
 
 public slots:
     void connecte(const QString&, quint16);
@@ -58,6 +59,10 @@ private slots:
     void envoiePaquet();
 
 private:
+    void debuteTransfert();
+    void supprimeSuivant();
+
+private:
     //Socket
     QTcpSocket *m_socket;
     quint32 m_taillePaquet;
@@ -65,6 +70,8 @@ private:
     //Transfert
     QFile *m_fichier;
     EtatTransfert m_etatTransfert;
+    QList<QFileInfo> m_listeTransfert;
+    QStringList m_listeSuppressions;
 };
 
 }

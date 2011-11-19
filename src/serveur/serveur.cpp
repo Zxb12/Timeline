@@ -78,7 +78,7 @@ void Serveur::debuteTransfert(FileHeader &header, Client *client)
     m_etatTransfert = CLIENT_VERS_SERVEUR;
 }
 
-void Serveur::termineTransfert()
+void Serveur::termineTransfert(Client *client)
 {
     //Ajoute l'entrée dans le cache
     CacheEntry entry;
@@ -91,9 +91,13 @@ void Serveur::termineTransfert()
     delete m_fichierEnTransfert.fichier;
     m_fichierEnTransfert.fichier = 0;
     m_etatTransfert = AUCUN_TRANSFERT;
+
+    Paquet out;
+    out << SMSG_TRANSFER_COMPLETE;
+    out >> client;
 }
 
-void Serveur::annuleTransfert()
+void Serveur::annuleTransfert(Client *client)
 {
     if (m_etatTransfert == CLIENT_VERS_SERVEUR)
     {
@@ -102,6 +106,10 @@ void Serveur::annuleTransfert()
         delete m_fichierEnTransfert.fichier;
         m_fichierEnTransfert.fichier = 0;
         m_etatTransfert = AUCUN_TRANSFERT;
+
+        Paquet out;
+        out << SMSG_TRANSFER_COMPLETE;
+        out >> client;
     }
 }
 
@@ -245,6 +253,7 @@ void Serveur::handleInitiateTransfer(Paquet *in, Client *client)
         out >> client;
         return;
     }
+
     //Extraction du header
     FileHeader header;
     *in >> header.nomClient;
@@ -263,7 +272,7 @@ void Serveur::handleInitiateTransfer(Paquet *in, Client *client)
     //Termine le transfert s'il envoie un dossier
     if (header.estUnDossier)
     {
-        termineTransfert();
+        termineTransfert(client);
     }
     //Sinon informe le client qu'on est prêts à recevoir les données
     else
@@ -277,7 +286,7 @@ void Serveur::handleInitiateTransfer(Paquet *in, Client *client)
 void Serveur::handleFinishTransfer(Paquet *, Client *client)
 {
     //Achève le transfert
-    termineTransfert();
+    termineTransfert(client);
 
     //Met à jour le statut de session
     client->setSessionState(AUTHED);
@@ -286,7 +295,7 @@ void Serveur::handleFinishTransfer(Paquet *, Client *client)
 void Serveur::handleCancelTransfer(Paquet *, Client *client)
 {
     //Annule le transfert
-    annuleTransfert();
+    annuleTransfert(client);
 
     //Met à jour le statut de session
     client->setSessionState(AUTHED);
@@ -315,7 +324,7 @@ void Serveur::handleDeleteFile(Paquet *in, Client *client)
 
     //Suppression du fichier
     debuteTransfert(header, client);
-    termineTransfert();
+    termineTransfert(client);
 
     //Notification de suppression
     Paquet out;

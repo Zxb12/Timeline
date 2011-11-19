@@ -1,6 +1,8 @@
 #ifndef DEFINES_H
 #define DEFINES_H
 
+#include "src/shared/shared.h"
+
 #include <QFile>
 #include <QDateTime>
 
@@ -9,16 +11,6 @@ namespace Serveur
 
 const QString cacheFileName = "Timeline.cache";
 const quint8 filesystemVersion = 6;
-
-struct FileHeader
-{
-    QString nomClient;
-    quint16 noSauvegarde, noVersion;
-    QDateTime derniereModif;
-    bool estUnDossier, supprime;
-
-    bool operator==(const FileHeader &other) { return nomClient == other.nomClient; }
-};
 
 struct FileDescription : FileHeader
 {

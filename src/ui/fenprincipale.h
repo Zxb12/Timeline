@@ -21,6 +21,7 @@ public:
 private slots:
     void consoleClient(QString);
     void consoleServeur(QString);
+    void listeRecue(QList<FileHeader>);
 
     void on_btn1_clicked();
     void on_btn2_clicked();
@@ -31,6 +32,10 @@ private:
 
     Client::Client *m_client;
     Serveur::Serveur *m_serveur;
+
+    //Transfert
+    QStringList m_dossiersDeTransfert;
+    bool m_enAttenteDeTransfert;
 };
 
 #endif // FENPRINCIPALE_H
