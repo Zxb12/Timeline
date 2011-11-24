@@ -5,6 +5,7 @@
 
 #include "src/client/client_c.h"
 #include "src/serveur/serveur.h"
+#include "src/shared/shared.h"
 
 namespace Ui {
     class FenPrincipale;
@@ -17,6 +18,9 @@ class FenPrincipale : public QMainWindow
 public:
     FenPrincipale(QWidget *parent = 0);
     ~FenPrincipale();
+
+signals:
+    void start(QDir, quint16);
 
 private slots:
     void consoleClient(QString);
@@ -32,6 +36,8 @@ private:
 
     Client::Client *m_client;
     Serveur::Serveur *m_serveur;
+    QThread *m_clientThread;
+    QThread *m_serveurThread;
 
     //Transfert
     QStringList m_dossiersDeTransfert;

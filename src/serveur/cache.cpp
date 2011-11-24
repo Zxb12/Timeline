@@ -8,7 +8,7 @@ namespace Serveur
 {
 
 Cache::Cache(QObject *parent) :
-    QObject(parent), m_dossier()
+    QObject(parent), m_noSauvegardeDerniereListe(-1), m_idFichier(0), m_noSauvegarde(0)
 {
 }
 
@@ -62,7 +62,6 @@ void Cache::chargeCache()
         stream >> entry.nomServeur >> entry.nomClient >> entry.noSauvegarde >> entry.noVersion >> entry.derniereModif
                >> entry.estUnDossier >> entry.supprime;
         m_historique.append(entry);
-        console("Cache: " + entry.nomClient + "(" + entry.nomServeur + "), sauv: " + nbr(entry.noSauvegarde) + ", vers: " + nbr(entry.noVersion));
     }
     cache.close();
 }
@@ -141,7 +140,7 @@ void Cache::reconstruireCache()
 
         //Ajout dans le cache
         CacheEntry entry;
-        entry.nomServeur = itr.fileName();
+        entry.nomServeur = itr.filePath();
         entry.estUnDossier = octetEnTete & (1 << 1);
         entry.supprime = octetEnTete & 1;
         fileStream >> entry.nomClient >> entry.noSauvegarde >> entry.noVersion >> entry.derniereModif;
@@ -182,6 +181,12 @@ CacheEntry Cache::nouveauFichier(const QString &nomClient)
 void Cache::ajoute(const CacheEntry &entry)
 {
     m_historique.append(entry);
+
+    if (m_noSauvegarde == m_noSauvegardeDerniereListe)
+        ajouteFichierListe(entry, m_derniereListe);
+    else
+        m_noSauvegardeDerniereListe = -1;
+
     m_idFichier++;
 }
 
@@ -212,37 +217,47 @@ QString Cache::nomFichierReel(const QString &nomClient, quint16 noSauvegarde)
 
 QList<CacheEntry> Cache::listeFichiers(quint16 noSauvegarde)
 {
-    QList<CacheEntry> liste;
+    //On vérifie si l'état du système correpond à la demande
+    if (noSauvegarde == m_noSauvegardeDerniereListe)
+        return m_derniereListe;
+
+    //Sinon, on génère la liste
+    m_derniereListe.clear();
     foreach(CacheEntry entry, m_historique)
     {
         if (entry.noSauvegarde > noSauvegarde)
             break;
 
-        //On recherche si l'entrée est déjà dans la liste
-        int index = liste.indexOf(entry);
+        ajouteFichierListe(entry, m_derniereListe);
+    }
+    m_noSauvegardeDerniereListe = noSauvegarde;
+    return m_derniereListe;
+}
 
-        if (index == -1)
+void Cache::ajouteFichierListe(const CacheEntry &entry, QList<CacheEntry> liste)
+{
+    //On recherche si l'entrée est déjà dans la liste
+    int index = m_derniereListe.indexOf(entry);
+
+    if (index == -1)
+    {
+        //Le fichier n'est pas dans la liste: on l'y ajoute
+        m_derniereListe.append(entry);
+    }
+    else
+    {
+        //Le fichier est trouvé, on va devoir modifier la liste
+        if (entry.supprime == false)
         {
-            //Le fichier n'est pas dans la liste: on l'y ajoute
-            liste.append(entry);
+            //Nouvelle version du fichier
+            m_derniereListe.replace(index, entry);
         }
         else
         {
-            //Le fichier est trouvé, on va devoir modifier la liste
-            if (entry.supprime == false)
-            {
-                //Nouvelle version du fichier
-                liste.replace(index, entry);
-            }
-            else
-            {
-                //Fichier supprimé
-                liste.removeAt(index);
-            }
+            //Fichier supprimé
+            m_derniereListe.removeAt(index);
         }
     }
-
-    return liste;
 }
 
 }

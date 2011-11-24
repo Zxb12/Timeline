@@ -1,31 +1,57 @@
 #include "fenprincipale.h"
 #include "ui_fenprincipale.h"
 
+#include "src/client/client_c.h"
+#include "src/serveur/serveur.h"
+
 #include <QTime>
 #include <QDir>
 #include <QFileDialog>
 #include <QDirIterator>
+#include <QThread>
 
 FenPrincipale::FenPrincipale(QWidget *parent) :
-    QMainWindow(parent), ui(new Ui::FenPrincipale), m_dossiersDeTransfert("E:/Timeline"), m_enAttenteDeTransfert(false)
+    QMainWindow(parent), ui(new Ui::FenPrincipale), m_dossiersDeTransfert(), m_enAttenteDeTransfert(false)
 {
     ui->setupUi(this);
+    m_dossiersDeTransfert << "E:/dev/PDCurses-3.4";
 
     //Création des objets serveur et client
     //TODO: les allouer seulement quand c'est nécessaire (au lancement de la sauvegarde)
-    m_client = new Client::Client(this);
-    m_serveur = new Serveur::Serveur(this);
+    m_client = new Client::Client;
+    m_serveur = new Serveur::Serveur;
+    m_clientThread = new QThread;
+    m_serveurThread = new QThread;
 
-    connect(m_client, SIGNAL(consoleOut(QString)), this, SLOT(consoleClient(QString)));
+    //Lancement des threads
+    m_client->moveToThread(m_clientThread);
+    m_serveur->moveToThread(m_serveurThread);
+    m_clientThread->start(QThread::LowPriority);
+    m_serveurThread->start(QThread::LowPriority);
+
+    //Connexions
     connect(m_client, SIGNAL(listeRecue(QList<FileHeader>)), this, SLOT(listeRecue(QList<FileHeader>)));
+    connect(m_client, SIGNAL(consoleOut(QString)), this, SLOT(consoleClient(QString)));
     connect(m_serveur, SIGNAL(consoleOut(QString)), this, SLOT(consoleServeur(QString)));
 
-    m_serveur->start(QDir("Z:/Timeline"), TIMELINE_PORT);
-    m_client->connecte("localhost", TIMELINE_PORT);
+    //Appels des fonctions
+    qRegisterMetaType<QDir>("QDir");
+    qRegisterMetaType<QList<FileHeader> >("QList<FileHeader>");
+    qRegisterMetaType<QFileInfo>("QFileInfo");
+    QMetaObject::invokeMethod(m_serveur, "start", Qt::QueuedConnection, Q_ARG(QDir,QDir("Z:/Timeline")), Q_ARG(quint16,TIMELINE_PORT));
+    QMetaObject::invokeMethod(m_client, "connecte", Qt::QueuedConnection, Q_ARG(QString,"localhost"), Q_ARG(quint16,TIMELINE_PORT));
 }
 
 FenPrincipale::~FenPrincipale()
 {
+    m_clientThread->quit();
+    m_clientThread->wait();
+    m_serveurThread->quit();
+    m_serveurThread->wait();
+    delete m_clientThread;
+    delete m_serveurThread;
+    delete m_client;
+    delete m_serveur;
     delete ui;
 }
 
@@ -46,8 +72,7 @@ void FenPrincipale::listeRecue(QList<FileHeader> liste)
     if (!m_enAttenteDeTransfert)
         return;
 
-    m_client->nouvelleSauvegarde();
-    qDebug() << "Début: " << liste.size();
+    QMetaObject::invokeMethod(m_client, "nouvelleSauvegarde", Qt::QueuedConnection);
 
     //Création de la liste de fichiers
     foreach(QString dossier, m_dossiersDeTransfert)
@@ -60,14 +85,14 @@ void FenPrincipale::listeRecue(QList<FileHeader> liste)
             if (index == -1)
             {
                 //On ajoute le fichier
-                m_client->envoie(fileInfo);
+                QMetaObject::invokeMethod(m_client, "envoie", Qt::QueuedConnection, Q_ARG(QFileInfo,fileInfo));
             }
             else
             {
                 //On vérifie la date du fichier et on met à jour si nécessaire
                 if (fileInfo.lastModified() > liste.at(index).derniereModif)
                 {
-                    m_client->envoie(fileInfo);
+                    QMetaObject::invokeMethod(m_client, "envoie", Qt::QueuedConnection, Q_ARG(QFileInfo,fileInfo));
                 }
 
                 //On supprime le fichier de la liste
@@ -76,12 +101,10 @@ void FenPrincipale::listeRecue(QList<FileHeader> liste)
         }
     }
 
-    qDebug() << "A supprimer: " << liste.size();
-
     //Suppression des fichiers restants
     foreach(FileHeader header, liste)
     {
-        m_client->supprime(header.nomClient);
+        QMetaObject::invokeMethod(m_client, "supprime", Qt::QueuedConnection, Q_ARG(QString,header.nomClient));
     }
 
     m_enAttenteDeTransfert = false;
@@ -90,18 +113,13 @@ void FenPrincipale::listeRecue(QList<FileHeader> liste)
 void FenPrincipale::on_btn1_clicked()
 {
     m_enAttenteDeTransfert = true;
-    m_client->listeFichiers();
+    QMetaObject::invokeMethod(m_client, "listeFichiers", Qt::QueuedConnection);
 }
 
 void FenPrincipale::on_btn2_clicked()
 {
-//    QString fichierLocal = QFileDialog::getSaveFileName(this);
-//    if (fichierLocal.isEmpty())
-//        return;
-//    m_client->recupereFichier("E:/Musique.mp3", fichierLocal);
 }
 
 void FenPrincipale::on_btn3_clicked()
 {
-    m_client->listeFichiers();
 }

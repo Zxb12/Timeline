@@ -33,7 +33,3 @@ HEADERS  += src/client/opcode_c.h \
     src/serveur/defines.h
 
 FORMS    += src/ui/fenprincipale.ui
-
-
-
-

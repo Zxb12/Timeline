@@ -35,6 +35,7 @@ public:
 
 private:
     void console(const QString &);
+    void ajouteFichierListe(const CacheEntry &, QList<CacheEntry>);
 
 signals:
     void consoleOut(QString);
@@ -42,6 +43,10 @@ signals:
 private:
     QDir m_dossier; //Dossier dans lequel se trouve le fichier du cache
     QList<CacheEntry> m_historique;
+
+    //Etat actuel du système de fichiers
+    QList<CacheEntry> m_derniereListe;
+    quint16 m_noSauvegardeDerniereListe;
 
     quint64 m_idFichier;
     quint16 m_noSauvegarde;

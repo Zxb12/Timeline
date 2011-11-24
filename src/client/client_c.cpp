@@ -22,7 +22,7 @@ Client::Client(QObject *parent) :
 Client::~Client()
 {
     if (m_socket->isOpen())
-        m_socket->disconnectFromHost();
+        m_socket->abort();
 }
 
 void Client::console(const QString &msg)
@@ -231,7 +231,6 @@ void Client::debuteTransfert()
     }
 
     console("Début du transfert de " + fichier.filePath());
-    QCoreApplication::processEvents();
 
     //Début du transfert
     Paquet out;

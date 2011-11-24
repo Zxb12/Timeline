@@ -24,7 +24,6 @@ public:
     Serveur(QObject *parent = 0);
     ~Serveur();
 
-    quint16 start(QDir, quint16);
 
     //Handlers
     void handleHello(Paquet*, Client*);
@@ -37,6 +36,9 @@ public:
     void handleDeleteFile(Paquet*, Client*);
     void handleFileList(Paquet*, Client*);
     void handleRecoverFile(Paquet*, Client*);
+
+public slots:
+    quint16 start(QDir, quint16);
 
 private:
     //Helpers transfert

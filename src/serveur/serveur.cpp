@@ -19,6 +19,10 @@ Serveur::Serveur(QObject *parent) :
 Serveur::~Serveur()
 {
     m_cache.sauveCache();
+    foreach(Client *client, m_clients)
+    {
+        client->socket()->abort();
+    }
 }
 
 void Serveur::console(const QString &msg)
@@ -39,6 +43,8 @@ quint16 Serveur::start(QDir stockage, quint16 port = 0)
     //Création du dossier de stockage si besoin
     if (!m_stockage.exists())
         m_stockage.mkdir(m_stockage.absolutePath());
+
+    qDebug() << thread();
 
     //Chargement du cache
     m_cache.changeDossier(m_stockage);
@@ -91,10 +97,6 @@ void Serveur::termineTransfert(Client *client)
     delete m_fichierEnTransfert.fichier;
     m_fichierEnTransfert.fichier = 0;
     m_etatTransfert = AUCUN_TRANSFERT;
-
-    Paquet out;
-    out << SMSG_TRANSFER_COMPLETE;
-    out >> client;
 }
 
 void Serveur::annuleTransfert(Client *client)
@@ -273,6 +275,10 @@ void Serveur::handleInitiateTransfer(Paquet *in, Client *client)
     if (header.estUnDossier)
     {
         termineTransfert(client);
+
+        Paquet out;
+        out << SMSG_TRANSFER_COMPLETE;
+        out >> client;
     }
     //Sinon informe le client qu'on est prêts à recevoir les données
     else
@@ -287,6 +293,11 @@ void Serveur::handleFinishTransfer(Paquet *, Client *client)
 {
     //Achève le transfert
     termineTransfert(client);
+
+    //Notifie le client
+    Paquet out;
+    out << SMSG_TRANSFER_COMPLETE;
+    out >> client;
 
     //Met à jour le statut de session
     client->setSessionState(AUTHED);
@@ -411,8 +422,6 @@ void Serveur::handleRecoverFile(Paquet *in, Client *client)
            >> m_fichierEnTransfert.derniereModif;
 
     envoiePaquet(client);
-
 }
-
 
 }

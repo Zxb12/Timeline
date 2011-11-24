@@ -20,13 +20,6 @@ public:
     Client(QObject *parent = 0);
     ~Client();
 
-    //Envoi/réception de fichiers
-    void nouvelleSauvegarde();
-    void envoie(const QFileInfo &);
-    void supprime(const QString &);
-    void listeFichiers(quint16 = -1);
-    void recupereFichier(const QString &, const QString &, quint16 = -1);
-
     //Handlers
     void handleClientSide(Paquet*);
     void handleError(Paquet*);
@@ -40,12 +33,19 @@ public:
     void handleCancelTransfer(Paquet*);
     void handleFileData(Paquet*);
 
+public slots:
+    void connecte(const QString&, quint16);
+
+    //Envoi/réception de fichiers
+    void nouvelleSauvegarde();
+    void envoie(const QFileInfo &);
+    void supprime(const QString &);
+    void listeFichiers(quint16 = -1);
+    void recupereFichier(const QString &, const QString &, quint16 = -1);
+
 signals:
     void consoleOut(QString);
     void listeRecue(QList<FileHeader>);
-
-public slots:
-    void connecte(const QString&, quint16);
 
 private slots:
     void console(const QString&);
