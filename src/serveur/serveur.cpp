@@ -61,7 +61,7 @@ void Serveur::debuteTransfert(FileHeader &header, Client *client)
     CacheEntry entry = m_cache.nouveauFichier(header.nomClient);
     header.noSauvegarde = entry.noSauvegarde;
     header.noVersion = entry.noVersion;
-    m_fichierEnTransfert.fichier = new QFile(entry.nomServeur, this);
+    m_fichierEnTransfert.fichier = new QFile(m_stockage.absolutePath() + "/" + entry.nomServeur, this);
 
     if (!m_fichierEnTransfert.fichier->open(QIODevice::WriteOnly))
     {
@@ -89,7 +89,7 @@ void Serveur::termineTransfert(Client *client)
     //Ajoute l'entrée dans le cache
     CacheEntry entry;
     entry = m_fichierEnTransfert;
-    entry.nomServeur = m_fichierEnTransfert.fichier->fileName();
+    entry.nomServeur = m_fichierEnTransfert.fichier->fileName().section('/', -1);
     m_cache.ajoute(entry);
 
     //Fermeture du fichier et fin du transfert
@@ -398,7 +398,7 @@ void Serveur::handleRecoverFile(Paquet *in, Client *client)
     }
 
     //On peut lancer le transfert
-    m_fichierEnTransfert.fichier = new QFile(nomServeur);
+    m_fichierEnTransfert.fichier = new QFile(m_stockage.absolutePath() + "/" + nomServeur);
     if (!m_fichierEnTransfert.fichier->open(QIODevice::ReadOnly))
     {
         console("Impossible d'ouvrir le fichier: " + m_fichierEnTransfert.fichier->errorString());

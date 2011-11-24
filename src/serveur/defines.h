@@ -10,7 +10,7 @@ namespace Serveur
 {
 
 const QString cacheFileName = "Timeline.cache";
-const quint8 filesystemVersion = 6;
+const quint8 filesystemVersion = 7;
 
 struct FileDescription : FileHeader
 {

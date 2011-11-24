@@ -14,7 +14,7 @@ FenPrincipale::FenPrincipale(QWidget *parent) :
     QMainWindow(parent), ui(new Ui::FenPrincipale), m_dossiersDeTransfert(), m_enAttenteDeTransfert(false)
 {
     ui->setupUi(this);
-    m_dossiersDeTransfert << "E:/dev/PDCurses-3.4";
+    m_dossiersDeTransfert << "E:/dev/PDCurses-3.4" << "E:/dev/Programmation";
 
     //Création des objets serveur et client
     //TODO: les allouer seulement quand c'est nécessaire (au lancement de la sauvegarde)
@@ -38,7 +38,7 @@ FenPrincipale::FenPrincipale(QWidget *parent) :
     qRegisterMetaType<QDir>("QDir");
     qRegisterMetaType<QList<FileHeader> >("QList<FileHeader>");
     qRegisterMetaType<QFileInfo>("QFileInfo");
-    QMetaObject::invokeMethod(m_serveur, "start", Qt::QueuedConnection, Q_ARG(QDir,QDir("Z:/Timeline")), Q_ARG(quint16,TIMELINE_PORT));
+    QMetaObject::invokeMethod(m_serveur, "start", Qt::QueuedConnection, Q_ARG(QDir,QDir("E:/Timeline")), Q_ARG(quint16,TIMELINE_PORT));
     QMetaObject::invokeMethod(m_client, "connecte", Qt::QueuedConnection, Q_ARG(QString,"localhost"), Q_ARG(quint16,TIMELINE_PORT));
 }
 

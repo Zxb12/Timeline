@@ -140,7 +140,7 @@ void Cache::reconstruireCache()
 
         //Ajout dans le cache
         CacheEntry entry;
-        entry.nomServeur = itr.filePath();
+        entry.nomServeur = itr.fileName();
         entry.estUnDossier = octetEnTete & (1 << 1);
         entry.supprime = octetEnTete & 1;
         fileStream >> entry.nomClient >> entry.noSauvegarde >> entry.noVersion >> entry.derniereModif;
@@ -163,7 +163,7 @@ CacheEntry Cache::nouveauFichier(const QString &nomClient)
     //Génération du fichier
     CacheEntry entry;
     QString nbr = QString::number(m_idFichier, 36);
-    entry.nomServeur = m_dossier.absolutePath() + "/_" + QString("0").repeated(13 - nbr.size()) + nbr + ".tlf";
+    entry.nomServeur = "_" + QString("0").repeated(13 - nbr.size()) + nbr + ".tlf";
     entry.nomClient = nomClient;
     entry.noSauvegarde = m_noSauvegarde;
 
