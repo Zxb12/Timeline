@@ -17,12 +17,23 @@ Client::Client(QObject *parent) :
     connect(m_socket, SIGNAL(connected()),                                  this, SLOT(connecte()));
     connect(m_socket, SIGNAL(disconnected()),                               this, SLOT(deconnecte()));
     connect(m_socket, SIGNAL(error(QAbstractSocket::SocketError)),          this, SLOT(erreurSocket(QAbstractSocket::SocketError)));
+
 }
 
 Client::~Client()
 {
     if (m_socket->isOpen())
         m_socket->abort();
+}
+
+void Client::connecte(const QString &adresse, quint16 port)
+{
+    //Déconnecte la socket si elle est connectée
+    if (m_socket->state() == QTcpSocket::ConnectedState)
+        m_socket->abort();
+
+    console("Connexion en cours...");
+    m_socket->connectToHost(adresse, port);
 }
 
 void Client::console(const QString &msg)
@@ -86,7 +97,7 @@ void Client::donneesRecues()
     if (opCode < NB_OPCODES)
     {
         OpCodeHandler handler = OpCodeTable[opCode];
-        console("Paquet reçu: " + handler.nom + "("+nbr(opCode)+")");
+//        console("Paquet reçu: " + handler.nom + "("+nbr(opCode)+")");
         (this->*handler.f)(in);
     }
     else
@@ -113,16 +124,6 @@ void Client::erreurSocket(QAbstractSocket::SocketError erreur)
     }
 }
 
-void Client::connecte(const QString &adresse, quint16 port)
-{
-    //Déconnecte la socket si elle est connectée
-    if (m_socket->state() == QTcpSocket::ConnectedState)
-        m_socket->abort();
-
-    console("Connexion en cours...");
-    m_socket->connectToHost(adresse, port);
-}
-
 void Client::nouvelleSauvegarde()
 {
     Paquet out;
@@ -135,12 +136,15 @@ void Client::envoie(const QFileInfo &fichier)
     //On ajoute le fichier à la liste et on lance le transfert si nécessaire
     m_listeTransfert.append(fichier);
     if (m_etatTransfert == AUCUN_TRANSFERT)
-        debuteTransfert();
+        transfertSuivant();
 }
 
 void Client::supprime(const QString &adresse)
 {
+    //On ajoute le fichier à la liste et on lance la suppression si nécessaire
     m_listeSuppressions.append(adresse);
+    if (m_etatTransfert == AUCUN_TRANSFERT)
+        supprimeSuivant();
 }
 
 void Client::listeFichiers(quint16 noSauvegarde)
@@ -151,30 +155,12 @@ void Client::listeFichiers(quint16 noSauvegarde)
     out >> m_socket;
 }
 
-void Client::recupereFichier(const QString &fichierDistant, const QString &fichierLocal, quint16 noSauvegarde)
+void Client::recupereFichier(const FileHeader &header)
 {
-    //Vérifications
-    if (m_etatTransfert != AUCUN_TRANSFERT)
-    {
-        console("Un transfert est déjà en cours, impossible de récupérer le fichier");
-        return;
-    }
+    m_listeRecuperations.append(header);
 
-    //Ouverture du fichier local
-    m_fichier = new QFile(fichierLocal, this);
-    if (!m_fichier->open(QIODevice::WriteOnly | QIODevice::Truncate))
-    {
-        console("Impossible de créer le fichier local " + fichierLocal);
-        delete m_fichier;
-        m_fichier = 0;
-        return;
-    }
-
-    //Fichier ouvert, on peut commencer le transfert
-    Paquet out;
-    out << CMSG_RECOVER_FILE << fichierDistant << noSauvegarde;
-    out >> m_socket;
-    m_etatTransfert = SERVEUR_VERS_CLIENT;
+    if (m_etatTransfert == AUCUN_TRANSFERT)
+        recupereSuivant();
 }
 
 void Client::donneesEcrites()
@@ -202,7 +188,7 @@ void Client::envoiePaquet()
     }
 }
 
-void Client::debuteTransfert()
+void Client::transfertSuivant()
 {
     //Si un transfert est déjà en cours, on quitte !
     if (m_etatTransfert != AUCUN_TRANSFERT)
@@ -216,7 +202,8 @@ void Client::debuteTransfert()
         return;
     }
 
-    QFileInfo fichier = m_listeTransfert.takeFirst();
+    QFileInfo fichier = m_listeTransfert.first();
+    m_listeTransfert.pop_front();
 
     //Si le fichier est un dossier, m_fichier = 0
     if (fichier.isFile())
@@ -252,6 +239,47 @@ void Client::supprimeSuivant()
     {
         console("Suppressions terminées");
     }
+}
+
+void Client::recupereSuivant()
+{
+    //Vérifications
+    if (m_etatTransfert != AUCUN_TRANSFERT || m_listeRecuperations.size() == 0)
+        return;
+
+
+    //Création du dossier si nécessaire
+    FileHeader fichier = m_listeRecuperations.first();
+    m_listeRecuperations.pop_front();
+    QString nomFichier = fichier.nomClient;
+    nomFichier.remove(":"); //Supprime le caractère ":" des lecteurs (sur Windows)
+    nomFichier = m_dossierRecuperation.absolutePath() + "/" + nomFichier;
+    console("Réception de: " + fichier.nomClient);
+
+    if (fichier.estUnDossier)
+    {
+        m_dossierRecuperation.mkpath(nomFichier.section("/", 0, nomFichier.count("/")));
+        recupereSuivant();
+        return;
+    }
+    else
+        m_dossierRecuperation.mkpath(nomFichier.section("/", 0, nomFichier.count("/") - 1));
+
+    //Ouverture du fichier local
+    m_fichier = new QFile(nomFichier, this);
+    if (!m_fichier->open(QIODevice::WriteOnly | QIODevice::Truncate))
+    {
+        console("Impossible de créer le fichier local " + m_fichier->fileName());
+        delete m_fichier;
+        m_fichier = 0;
+        return;
+    }
+
+    //Fichier ouvert, on peut commencer le transfert
+    Paquet out;
+    out << CMSG_RECOVER_FILE << fichier.nomClient << fichier.noSauvegarde;
+    out >> m_socket;
+    m_etatTransfert = SERVEUR_VERS_CLIENT;
 }
 
 void Client::handleClientSide(Paquet *)
@@ -330,7 +358,7 @@ void Client::handleTransferComplete(Paquet *)
         m_fichier = 0;
     }
     m_etatTransfert = AUCUN_TRANSFERT;
-    debuteTransfert();
+    transfertSuivant();
 }
 
 void Client::handleFileDeleted(Paquet *)
@@ -342,7 +370,7 @@ void Client::handleFileList(Paquet *in)
 {
     quint32 nbFichiers;
     *in >> nbFichiers;
-    QList<FileHeader> liste;
+    QVector<FileHeader> liste;
     liste.reserve(nbFichiers);
 
     for (quint32 i = 0; i < nbFichiers; i++)
@@ -363,6 +391,7 @@ void Client::handleFinishTransfer(Paquet *)
     delete m_fichier;
     m_fichier = 0;
     m_etatTransfert = AUCUN_TRANSFERT;
+    recupereSuivant();
 }
 
 void Client::handleCancelTransfer(Paquet *)
@@ -371,6 +400,7 @@ void Client::handleCancelTransfer(Paquet *)
     delete m_fichier;
     m_fichier = 0;
     m_etatTransfert = AUCUN_TRANSFERT;
+    recupereSuivant();
 }
 
 void Client::handleFileData(Paquet *in)

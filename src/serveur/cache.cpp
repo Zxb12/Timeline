@@ -8,7 +8,7 @@ namespace Serveur
 {
 
 Cache::Cache(QObject *parent) :
-    QObject(parent), m_noSauvegardeDerniereListe(-1), m_idFichier(0), m_noSauvegarde(0)
+    QObject(parent), m_idFichier(0), m_noSauvegarde(0)
 {
 }
 
@@ -54,16 +54,20 @@ void Cache::chargeCache()
     }
 
     //Récupération des infos du cache
-    stream >> m_idFichier >> m_noSauvegarde;
     m_historique.clear();
+    m_fichiersSupprimes.clear();
+    stream >> m_idFichier >> m_noSauvegarde >> m_fichiersSupprimes;
     while (!stream.atEnd())
     {
-        CacheEntry entry;
-        stream >> entry.nomServeur >> entry.nomClient >> entry.noSauvegarde >> entry.noVersion >> entry.derniereModif
-               >> entry.estUnDossier >> entry.supprime;
-        m_historique.append(entry);
+        quint16 noSauvegarde;
+        QVector<CacheEntry> liste;
+        stream >> noSauvegarde >> liste;
+        m_historique[noSauvegarde] = liste;
+        console("Sauvegarde trouvée: " + nbr(noSauvegarde) + ", nbFichiers: " + nbr(liste.size()));
     }
     cache.close();
+
+    console("Cache de " + nbr(m_historique.size()) + " entrées chargé");
 }
 
 void Cache::sauveCache()
@@ -78,12 +82,14 @@ void Cache::sauveCache()
 
     //Ecriture du cache
     QDataStream stream(&cache);
-    stream << filesystemVersion << m_idFichier << m_noSauvegarde;
-    foreach (CacheEntry entry, m_historique)
+    stream << filesystemVersion << m_idFichier << m_noSauvegarde << m_fichiersSupprimes;
+    QMapIterator<quint16, QVector<CacheEntry> > itr(m_historique);
+    while(itr.hasNext())
     {
-        stream << entry.nomServeur << entry.nomClient << entry.noSauvegarde << entry.noVersion << entry.derniereModif
-               << entry.estUnDossier << entry.supprime;
+        itr.next();
+        stream << itr.key() << itr.value();
     }
+    cache.close();
 }
 
 void Cache::reconstruireCache()
@@ -107,10 +113,14 @@ void Cache::reconstruireCache()
 
     //Génération des entrées du cache
     QDirIterator itr(m_dossier.absolutePath(), QStringList("_*.tlf"), QDir::Files);
+    int nbTrouves = 0;
+    quint16 noSauvegarde = 0;
     while (itr.hasNext())
     {
         itr.next();
-        console("Fichier trouvé: " + itr.fileName());
+        nbTrouves++;
+        if (nbTrouves % 100 == 0)
+            console("Reconstruction: Fichiers analysés: " + nbr(nbTrouves));
 
         //Extraction du No de fichier
         QString fileName = itr.fileName();
@@ -144,10 +154,16 @@ void Cache::reconstruireCache()
         entry.estUnDossier = octetEnTete & (1 << 1);
         entry.supprime = octetEnTete & 1;
         fileStream >> entry.nomClient >> entry.noSauvegarde >> entry.noVersion >> entry.derniereModif;
-        m_historique.append(entry);
 
-        //Vérification du No de sauvegarde
-        m_noSauvegarde = qMax(m_noSauvegarde, entry.noSauvegarde);
+        if (entry.noSauvegarde > noSauvegarde)
+        {
+            //Copie de la liste
+            m_historique[entry.noSauvegarde] = m_historique.value(noSauvegarde);
+            m_noSauvegarde = noSauvegarde = entry.noSauvegarde;
+            console("Reconstruction: Sauvegarde no " + nbr(noSauvegarde));
+        }
+
+        ajouteFichier(entry);
     }
     cache.close();
 
@@ -168,10 +184,16 @@ CacheEntry Cache::nouveauFichier(const QString &nomClient)
     entry.noSauvegarde = m_noSauvegarde;
 
     //Recheche du No de version
-    QList<CacheEntry> liste = listeFichiers();
+    QVector<CacheEntry> liste = listeFichiers();
     int index = liste.indexOf(entry);
     if (index == -1)
-        entry.noVersion = 0;
+    {
+        index = m_fichiersSupprimes.indexOf(entry);
+        if (index == -1)
+            entry.noVersion = 0;
+        else
+            entry.noVersion = m_fichiersSupprimes.at(index).noVersion + 1;
+    }
     else
         entry.noVersion = liste.at(index).noVersion + 1;
 
@@ -180,19 +202,14 @@ CacheEntry Cache::nouveauFichier(const QString &nomClient)
 
 void Cache::ajoute(const CacheEntry &entry)
 {
-    m_historique.append(entry);
-
-    if (m_noSauvegarde == m_noSauvegardeDerniereListe)
-        ajouteFichierListe(entry, m_derniereListe);
-    else
-        m_noSauvegardeDerniereListe = -1;
+    ajouteFichier(entry);
 
     m_idFichier++;
 }
 
 bool Cache::existe(const QString &nomClient, quint16 noSauvegarde)
 {
-    QList<CacheEntry> liste = listeFichiers(noSauvegarde);
+    QVector<CacheEntry> liste = listeFichiers(noSauvegarde);
 
     foreach(CacheEntry entry, liste)
     {
@@ -204,7 +221,7 @@ bool Cache::existe(const QString &nomClient, quint16 noSauvegarde)
 
 QString Cache::nomFichierReel(const QString &nomClient, quint16 noSauvegarde)
 {
-    QList<CacheEntry> liste = listeFichiers(noSauvegarde);
+    QVector<CacheEntry> liste = listeFichiers(noSauvegarde);
 
     foreach(CacheEntry entry, liste)
     {
@@ -215,49 +232,55 @@ QString Cache::nomFichierReel(const QString &nomClient, quint16 noSauvegarde)
     return QString();
 }
 
-QList<CacheEntry> Cache::listeFichiers(quint16 noSauvegarde)
+QVector<CacheEntry> Cache::listeFichiers(quint16 noSauvegarde)
 {
-    //On vérifie si l'état du système correpond à la demande
-    if (noSauvegarde == m_noSauvegardeDerniereListe)
-        return m_derniereListe;
+    quint16 max = -1; //Il est impossible de comparer directement à -1
+    if (noSauvegarde == max)
+        noSauvegarde = m_noSauvegarde;
 
-    //Sinon, on génère la liste
-    m_derniereListe.clear();
-    foreach(CacheEntry entry, m_historique)
-    {
-        if (entry.noSauvegarde > noSauvegarde)
-            break;
-
-        ajouteFichierListe(entry, m_derniereListe);
-    }
-    m_noSauvegardeDerniereListe = noSauvegarde;
-    return m_derniereListe;
+    return m_historique.value(noSauvegarde);
 }
 
-void Cache::ajouteFichierListe(const CacheEntry &entry, QList<CacheEntry> liste)
+void Cache::nouvelleSauvegarde()
+{
+    m_noSauvegarde++;
+    if (m_noSauvegarde > 1)
+        m_historique[m_noSauvegarde] = m_historique[m_noSauvegarde - 1];
+    console("No nouvelle sauvegarde: " + nbr(m_noSauvegarde));
+}
+
+void Cache::ajouteFichier(const CacheEntry &entry)
 {
     //On recherche si l'entrée est déjà dans la liste
-    int index = m_derniereListe.indexOf(entry);
+    int index = m_historique[entry.noSauvegarde].indexOf(entry);
 
     if (index == -1)
     {
-        //Le fichier n'est pas dans la liste: on l'y ajoute
-        m_derniereListe.append(entry);
+        //Le fichier n'est pas dans la liste: on l'y ajoute s'il n'est pas supprimé
+        if (!entry.supprime)
+            m_historique[entry.noSauvegarde].append(entry);
     }
     else
     {
-        //Le fichier est trouvé, on va devoir modifier la liste
-        if (entry.supprime == false)
+        if (entry.noSauvegarde > m_historique[entry.noSauvegarde][index].noSauvegarde)
         {
-            //Nouvelle version du fichier
-            m_derniereListe.replace(index, entry);
-        }
-        else
-        {
-            //Fichier supprimé
-            m_derniereListe.removeAt(index);
+            //Le fichier est trouvé, on va devoir modifier la liste
+            if (!entry.supprime)
+            {
+                //Nouvelle version du fichier
+                m_historique[entry.noSauvegarde].replace(index, entry);
+            }
+            else
+            {
+                //Fichier supprimé
+                m_historique[entry.noSauvegarde].remove(index);
+            }
         }
     }
+
+    //On ajoute le fichier à la liste des fichiers supprimés si nécessaire
+    if (entry.supprime)
+        m_fichiersSupprimes.append(entry);
 }
 
 }

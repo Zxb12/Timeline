@@ -25,6 +25,8 @@ struct CacheEntry : FileHeader
 
     CacheEntry &operator=(const FileHeader &);
 };
+QDataStream &operator>>(QDataStream &, CacheEntry &);
+QDataStream &operator<<(QDataStream &, const CacheEntry &);
 
 }
 

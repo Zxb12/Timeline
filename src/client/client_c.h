@@ -35,17 +35,18 @@ public:
 
 public slots:
     void connecte(const QString&, quint16);
+    void setDossierRecuperation(const QDir &dossier) { m_dossierRecuperation = dossier; }
 
     //Envoi/réception de fichiers
     void nouvelleSauvegarde();
     void envoie(const QFileInfo &);
     void supprime(const QString &);
     void listeFichiers(quint16 = -1);
-    void recupereFichier(const QString &, const QString &, quint16 = -1);
+    void recupereFichier(const FileHeader &);
 
 signals:
     void consoleOut(QString);
-    void listeRecue(QList<FileHeader>);
+    void listeRecue(QVector<FileHeader>);
 
 private slots:
     void console(const QString&);
@@ -59,8 +60,9 @@ private slots:
     void envoiePaquet();
 
 private:
-    void debuteTransfert();
+    void transfertSuivant();
     void supprimeSuivant();
+    void recupereSuivant();
 
 private:
     //Socket
@@ -70,8 +72,11 @@ private:
     //Transfert
     QFile *m_fichier;
     EtatTransfert m_etatTransfert;
-    QList<QFileInfo> m_listeTransfert;
+    QVector<QFileInfo> m_listeTransfert;
     QStringList m_listeSuppressions;
+    QVector<FileHeader> m_listeRecuperations;
+    QDir m_dossierRecuperation;
+
 };
 
 }

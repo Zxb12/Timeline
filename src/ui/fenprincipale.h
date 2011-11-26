@@ -25,7 +25,7 @@ signals:
 private slots:
     void consoleClient(QString);
     void consoleServeur(QString);
-    void listeRecue(QList<FileHeader>);
+    void listeRecue(QVector<FileHeader>);
 
     void on_btn1_clicked();
     void on_btn2_clicked();
@@ -42,6 +42,7 @@ private:
     //Transfert
     QStringList m_dossiersDeTransfert;
     bool m_enAttenteDeTransfert;
+    bool m_enAttenteDeRecuperation;
 };
 
 #endif // FENPRINCIPALE_H

@@ -44,8 +44,6 @@ quint16 Serveur::start(QDir stockage, quint16 port = 0)
     if (!m_stockage.exists())
         m_stockage.mkdir(m_stockage.absolutePath());
 
-    qDebug() << thread();
-
     //Chargement du cache
     m_cache.changeDossier(m_stockage);
     m_cache.chargeCache();
@@ -169,7 +167,7 @@ void Serveur::paquetRecu(Paquet *in)
     if (opCode < NB_OPCODES)
     {
         OpCodeHandler handler = OpCodeTable[opCode];
-        console("Paquet reçu: " + handler.nom + "("+nbr(opCode)+")");
+//        console("Paquet reçu: " + handler.nom + "("+nbr(opCode)+")");
 
         //Vérification des droits
         if (handler.state & client->sessionState())
@@ -266,6 +264,7 @@ void Serveur::handleInitiateTransfer(Paquet *in, Client *client)
     header.supprime = false;
 
     //Débute le transfert
+    console("Réception de: " + header.nomClient);
     debuteTransfert(header, client);
 
     //Met à jour le statut de session
@@ -349,7 +348,7 @@ void Serveur::handleFileList(Paquet *in, Client *client)
     quint16 noSauv;
     *in >> noSauv;
 
-    QList<CacheEntry> liste;
+    QVector<CacheEntry> liste;
     liste = m_cache.listeFichiers(noSauv);
 
     //Envoi de la liste
