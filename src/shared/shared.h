@@ -17,7 +17,8 @@ struct FileHeader
 
     FileHeader() : nomClient(), noSauvegarde(0), noVersion(0), derniereModif(), estUnDossier(false), supprime(false) {}
     FileHeader(const QString &nom) : nomClient(nom), noSauvegarde(0), noVersion(0), derniereModif(), estUnDossier(false), supprime(false) {}
-    bool operator==(const FileHeader &other) { return nomClient == other.nomClient; }
+    bool operator==(const FileHeader &other) const { return nomClient == other.nomClient; }
+    bool operator<(const FileHeader &other) const { return nomClient < other.nomClient; }
 };
 
 enum Error

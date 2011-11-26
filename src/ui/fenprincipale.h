@@ -25,7 +25,7 @@ signals:
 private slots:
     void consoleClient(QString);
     void consoleServeur(QString);
-    void listeRecue(QVector<FileHeader>);
+    void listeRecue(QList<FileHeader>);
 
     void on_btn1_clicked();
     void on_btn2_clicked();

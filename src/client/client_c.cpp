@@ -370,7 +370,7 @@ void Client::handleFileList(Paquet *in)
 {
     quint32 nbFichiers;
     *in >> nbFichiers;
-    QVector<FileHeader> liste;
+    QList<FileHeader> liste;
     liste.reserve(nbFichiers);
 
     for (quint32 i = 0; i < nbFichiers; i++)

@@ -46,7 +46,7 @@ public slots:
 
 signals:
     void consoleOut(QString);
-    void listeRecue(QVector<FileHeader>);
+    void listeRecue(QList<FileHeader>);
 
 private slots:
     void console(const QString&);

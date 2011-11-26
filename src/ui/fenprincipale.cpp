@@ -30,14 +30,14 @@ FenPrincipale::FenPrincipale(QWidget *parent) :
     m_serveurThread->start(QThread::LowPriority);
 
     //Connexions
-    connect(m_client, SIGNAL(listeRecue(QVector<FileHeader>)), this, SLOT(listeRecue(QVector<FileHeader>)));
+    connect(m_client, SIGNAL(listeRecue(QList<FileHeader>)), this, SLOT(listeRecue(QList<FileHeader>)));
     connect(m_client, SIGNAL(consoleOut(QString)), this, SLOT(consoleClient(QString)));
     connect(m_serveur, SIGNAL(consoleOut(QString)), this, SLOT(consoleServeur(QString)));
 
     //Appels des fonctions
     qRegisterMetaType<QDir>("QDir");
     qRegisterMetaType<QFileInfo>("QFileInfo");
-    qRegisterMetaType<QVector<FileHeader> >("QVector<FileHeader>");
+    qRegisterMetaType<QList<FileHeader> >("QList<FileHeader>");
     qRegisterMetaType<FileHeader>("FileHeader");
     QMetaObject::invokeMethod(m_serveur, "start", Qt::QueuedConnection, Q_ARG(QDir,QDir("E:/Timeline")), Q_ARG(quint16,TIMELINE_PORT));
     QMetaObject::invokeMethod(m_client, "connecte", Qt::QueuedConnection, Q_ARG(QString,"localhost"), Q_ARG(quint16,TIMELINE_PORT));
@@ -68,29 +68,56 @@ void FenPrincipale::consoleServeur(QString msg)
     ui->consoleServeur->appendPlainText(msg);
 }
 
-void FenPrincipale::listeRecue(QVector<FileHeader> liste)
+void FenPrincipale::listeRecue(QList<FileHeader> listeDistante)
 {
-    QVector<FileHeader> copieListe = liste;
+    QList<FileHeader> copieListe = listeDistante;
+    consoleClient("Liste reçue");
+    qApp->processEvents();
+
     //Envoi des fichiers
     if (m_enAttenteDeTransfert)
     {
-        bool nouvelleSauvegardeLancee = false;
+        //Génération de la liste locale
+        QList<QString> listeLocale;
         int n = 0;
-        //Création de la liste de fichiers
         foreach(QString dossier, m_dossiersDeTransfert)
         {
             QDirIterator itr(dossier, QDir::Files | QDir::Dirs | QDir::NoDotAndDotDot, QDirIterator::Subdirectories);
             while(itr.hasNext())
             {
                 n++;
-                if (n % 100 == 0)
+                if (n % 1000 == 0)
                 {
-                    consoleClient(nbr(n) + " fichiers analysés");
-                    QApplication::processEvents();
+                    consoleClient("Fichiers trouvés: " + nbr(n));
+                    qApp->processEvents();
                 }
-                int index = liste.indexOf(itr.next());
-                QFileInfo fileInfo = itr.fileInfo();
-                if (index == -1)
+                listeLocale.append(itr.next());
+            }
+        }
+        qSort(listeDistante.begin(), listeDistante.end());
+        qSort(listeLocale.begin(), listeLocale.end());
+        consoleClient("Fin de la génération de la liste locale");
+        qApp->processEvents();
+        n = 0;
+        bool nouvelleSauvegardeLancee = false;
+
+        while (!listeDistante.isEmpty() && !listeLocale.isEmpty())
+        {
+            n++;
+            if (n % 1000 == 0)
+            {
+                consoleClient("Fichiers analysés: " + nbr(n));
+                qApp->processEvents();
+            }
+
+            const FileHeader &header = listeDistante.first();
+            const QString &nomLocal = listeLocale.first();
+
+            if (header.nomClient == nomLocal)
+            {
+                //Fichier existe, on vérifie la date
+                QFileInfo fileInfo(nomLocal);
+                if (fileInfo.lastModified() > header.derniereModif)
                 {
                     //On ajoute le fichier
                     if (!nouvelleSauvegardeLancee)
@@ -98,55 +125,48 @@ void FenPrincipale::listeRecue(QVector<FileHeader> liste)
                         nouvelleSauvegardeLancee = true;
                         QMetaObject::invokeMethod(m_client, "nouvelleSauvegarde", Qt::QueuedConnection);
                     }
-
                     QMetaObject::invokeMethod(m_client, "envoie", Qt::QueuedConnection, Q_ARG(QFileInfo,fileInfo));
                 }
-                else
-                {
-                    //On vérifie la date du fichier et on met à jour si nécessaire
-                    if (fileInfo.lastModified() > liste.at(index).derniereModif)
-                    {
-                        if (!nouvelleSauvegardeLancee)
-                        {
-                            nouvelleSauvegardeLancee = true;
-                            QMetaObject::invokeMethod(m_client, "nouvelleSauvegarde", Qt::QueuedConnection);
-                        }
 
-                        QMetaObject::invokeMethod(m_client, "envoie", Qt::QueuedConnection, Q_ARG(QFileInfo,fileInfo));
-                    }
-
-                    //On supprime le fichier de la liste
-                    liste.remove(index);
-                }
+                listeDistante.removeFirst();
+                listeLocale.removeFirst();
             }
-        }
-
-        //Suppression des fichiers restants
-        foreach(FileHeader header, liste)
-        {
-            if (!nouvelleSauvegardeLancee)
+            else if (header.nomClient < nomLocal)
             {
-                nouvelleSauvegardeLancee = true;
-                QMetaObject::invokeMethod(m_client, "nouvelleSauvegarde", Qt::QueuedConnection);
+                //Fichier disant présent, fichier local absent
+                //Il faut supprimer le fichier distant
+                if (!nouvelleSauvegardeLancee)
+                {
+                    nouvelleSauvegardeLancee = true;
+                    QMetaObject::invokeMethod(m_client, "nouvelleSauvegarde", Qt::QueuedConnection);
+                }
+                QMetaObject::invokeMethod(m_client, "supprime", Qt::QueuedConnection, Q_ARG(QString,header.nomClient));
+                listeDistante.removeFirst();
             }
-
-            QMetaObject::invokeMethod(m_client, "supprime", Qt::QueuedConnection, Q_ARG(QString,header.nomClient));
+            else
+            {
+                //Fichier local présent, fichier distant absent
+                //Il faut envoyer le fichier
+                if (!nouvelleSauvegardeLancee)
+                {
+                    nouvelleSauvegardeLancee = true;
+                    QMetaObject::invokeMethod(m_client, "nouvelleSauvegarde", Qt::QueuedConnection);
+                }
+                QFileInfo fileInfo(nomLocal);
+                QMetaObject::invokeMethod(m_client, "envoie", Qt::QueuedConnection, Q_ARG(QFileInfo,fileInfo));
+                listeLocale.removeFirst();
+            }
         }
-
-        if (!nouvelleSauvegardeLancee)
-            consoleClient("Aucun transfert n'est nécessaire !");
-
-        m_enAttenteDeTransfert = false;
     }
 
     //Récupération des fichiers
     if (m_enAttenteDeRecuperation)
     {
-        liste = copieListe;
+        listeDistante = copieListe;
         QMetaObject::invokeMethod(m_client, "setDossierRecuperation", Qt::QueuedConnection, Q_ARG(QDir,QDir("E:/Récupération")));
 
 
-        foreach(FileHeader header, liste)
+        foreach(FileHeader header, listeDistante)
         {
             QMetaObject::invokeMethod(m_client, "recupereFichier", Qt::QueuedConnection, Q_ARG(FileHeader,header));
         }
