@@ -60,7 +60,7 @@ void Cache::chargeCache()
     while (!stream.atEnd())
     {
         quint16 noSauvegarde;
-        QVector<CacheEntry> liste;
+        QList<CacheEntry> liste;
         stream >> noSauvegarde >> liste;
         m_historique[noSauvegarde] = liste;
         console("Sauvegarde trouvée: " + nbr(noSauvegarde) + ", nbFichiers: " + nbr(liste.size()));
@@ -83,7 +83,7 @@ void Cache::sauveCache()
     //Ecriture du cache
     QDataStream stream(&cache);
     stream << filesystemVersion << m_idFichier << m_noSauvegarde << m_fichiersSupprimes;
-    QMapIterator<quint16, QVector<CacheEntry> > itr(m_historique);
+    QMapIterator<quint16, QList<CacheEntry> > itr(m_historique);
     while(itr.hasNext())
     {
         itr.next();
@@ -184,11 +184,11 @@ CacheEntry Cache::nouveauFichier(const QString &nomClient)
     entry.noSauvegarde = m_noSauvegarde;
 
     //Recheche du No de version
-    QVector<CacheEntry> liste = listeFichiers();
+    QList<CacheEntry> liste = listeFichiers();
     int index = liste.indexOf(entry);
     if (index == -1)
     {
-        index = m_fichiersSupprimes.indexOf(entry);
+        index = m_fichiersSupprimes.lastIndexOf(entry);
         if (index == -1)
             entry.noVersion = 0;
         else
@@ -209,7 +209,7 @@ void Cache::ajoute(const CacheEntry &entry)
 
 bool Cache::existe(const QString &nomClient, quint16 noSauvegarde)
 {
-    QVector<CacheEntry> liste = listeFichiers(noSauvegarde);
+    QList<CacheEntry> liste = listeFichiers(noSauvegarde);
 
     foreach(CacheEntry entry, liste)
     {
@@ -221,7 +221,7 @@ bool Cache::existe(const QString &nomClient, quint16 noSauvegarde)
 
 QString Cache::nomFichierReel(const QString &nomClient, quint16 noSauvegarde)
 {
-    QVector<CacheEntry> liste = listeFichiers(noSauvegarde);
+    QList<CacheEntry> liste = listeFichiers(noSauvegarde);
 
     foreach(CacheEntry entry, liste)
     {
@@ -232,7 +232,7 @@ QString Cache::nomFichierReel(const QString &nomClient, quint16 noSauvegarde)
     return QString();
 }
 
-QVector<CacheEntry> Cache::listeFichiers(quint16 noSauvegarde)
+QList<CacheEntry> Cache::listeFichiers(quint16 noSauvegarde)
 {
     quint16 max = -1; //Il est impossible de comparer directement à -1
     if (noSauvegarde == max)
@@ -273,7 +273,7 @@ void Cache::ajouteFichier(const CacheEntry &entry)
             else
             {
                 //Fichier supprimé
-                m_historique[entry.noSauvegarde].remove(index);
+                m_historique[entry.noSauvegarde].removeAt(index);
             }
         }
     }

@@ -72,9 +72,9 @@ private:
     //Transfert
     QFile *m_fichier;
     EtatTransfert m_etatTransfert;
-    QVector<QFileInfo> m_listeTransfert;
+    QList<QFileInfo> m_listeTransfert;
     QStringList m_listeSuppressions;
-    QVector<FileHeader> m_listeRecuperations;
+    QList<FileHeader> m_listeRecuperations;
     QDir m_dossierRecuperation;
 
 };

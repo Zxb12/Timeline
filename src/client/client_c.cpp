@@ -235,10 +235,6 @@ void Client::supprimeSuivant()
         out << CMSG_DELETE_FILE << m_listeSuppressions.takeFirst();
         out >> m_socket;
     }
-    else
-    {
-        console("Suppressions terminées");
-    }
 }
 
 void Client::recupereSuivant()

@@ -7,7 +7,7 @@
 #include <QDir>
 #include <QDateTime>
 #include <QMap>
-#include <QVector>
+#include <QList>
 
 namespace Serveur
 {
@@ -28,7 +28,7 @@ public:
     void ajoute(const CacheEntry &);
     bool existe(const QString &, quint16 = -1);
     QString nomFichierReel(const QString &, quint16 = -1);
-    QVector<CacheEntry> listeFichiers(quint16 = -1);
+    QList<CacheEntry> listeFichiers(quint16 = -1);
 
     //Accesseurs
     quint64 idFichier() { return m_idFichier; }
@@ -45,8 +45,8 @@ signals:
 private:
     QDir m_dossier; //Dossier dans lequel se trouve le fichier du cache
 
-    QMap<quint16, QVector<CacheEntry> > m_historique;
-    QVector<CacheEntry> m_fichiersSupprimes;
+    QMap<quint16, QList<CacheEntry> > m_historique;
+    QList<CacheEntry> m_fichiersSupprimes;
 
     quint64 m_idFichier;
     quint16 m_noSauvegarde;

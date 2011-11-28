@@ -82,7 +82,7 @@ void Serveur::debuteTransfert(FileHeader &header, Client *client)
     m_etatTransfert = CLIENT_VERS_SERVEUR;
 }
 
-void Serveur::termineTransfert(Client *client)
+void Serveur::termineTransfert(Client */*client*/)
 {
     //Ajoute l'entrée dans le cache
     CacheEntry entry;
@@ -328,6 +328,8 @@ void Serveur::handleDeleteFile(Paquet *in, Client *client)
     *in >> header.nomClient;
     *in >> header.estUnDossier;
 
+    console("Suppression de: " + header.nomClient);
+
     //Rempmlissage du header
     header.derniereModif = QDateTime();
     header.supprime = true;
@@ -348,7 +350,7 @@ void Serveur::handleFileList(Paquet *in, Client *client)
     quint16 noSauv;
     *in >> noSauv;
 
-    QVector<CacheEntry> liste;
+    QList<CacheEntry> liste;
     liste = m_cache.listeFichiers(noSauv);
 
     //Envoi de la liste

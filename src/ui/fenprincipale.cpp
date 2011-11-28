@@ -157,6 +157,28 @@ void FenPrincipale::listeRecue(QList<FileHeader> listeDistante)
                 listeLocale.removeFirst();
             }
         }
+
+        //Envoi/suppression des fichiers restants
+        foreach(FileHeader header, listeDistante)
+        {
+            if (!nouvelleSauvegardeLancee)
+            {
+                nouvelleSauvegardeLancee = true;
+                QMetaObject::invokeMethod(m_client, "nouvelleSauvegarde", Qt::QueuedConnection);
+            }
+            QMetaObject::invokeMethod(m_client, "supprime", Qt::QueuedConnection, Q_ARG(QString,header.nomClient));
+        }
+
+        foreach(QString nomFichier, listeLocale)
+        {
+            QFileInfo fileInfo(nomFichier);
+            if (!nouvelleSauvegardeLancee)
+            {
+                nouvelleSauvegardeLancee = true;
+                QMetaObject::invokeMethod(m_client, "nouvelleSauvegarde", Qt::QueuedConnection);
+            }
+            QMetaObject::invokeMethod(m_client, "envoie", Qt::QueuedConnection, Q_ARG(QFileInfo,fileInfo));
+        }
     }
 
     //Récupération des fichiers
