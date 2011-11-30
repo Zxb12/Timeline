@@ -45,7 +45,7 @@ void Cache::chargeCache()
     stream >> version;
 
     //Vérification de la version du cache
-    if (version != filesystemVersion)
+    if (version != cacheVersion)
     {
         console("Cache obsolète...");
         cache.close();
@@ -82,7 +82,7 @@ void Cache::sauveCache()
 
     //Ecriture du cache
     QDataStream stream(&cache);
-    stream << filesystemVersion << m_idFichier << m_noSauvegarde << m_fichiersSupprimes;
+    stream << cacheVersion << m_idFichier << m_noSauvegarde << m_fichiersSupprimes;
     QMapIterator<quint16, QList<CacheEntry> > itr(m_historique);
     while(itr.hasNext())
     {
@@ -142,7 +142,7 @@ void Cache::reconstruireCache()
         quint8 octetEnTete, version;
         fileStream >> octetEnTete;
         version = octetEnTete >> 2; //On décale les bits à droite pour effacer les bits dossier et supprimé.
-        if (version != filesystemVersion)
+        if (version != filesVersion)
         {
             console("Fichier d'une ancienne version(" + nbr(version) + ")");
             continue;

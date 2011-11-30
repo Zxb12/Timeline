@@ -75,7 +75,7 @@ void Serveur::debuteTransfert(FileHeader &header, Client *client)
 
     //Ecriture de l'en-tête.
     QDataStream stream(m_fichierEnTransfert.fichier);
-    quint8 octetEnTete = (filesystemVersion << 2) | (header.estUnDossier << 1) | (header.supprime);
+    quint8 octetEnTete = (filesVersion << 2) | (header.estUnDossier << 1) | (header.supprime);
     stream << octetEnTete << header.nomClient << header.noSauvegarde << header.noVersion << header.derniereModif;
 
     m_fichierEnTransfert = header;
