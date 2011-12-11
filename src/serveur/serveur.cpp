@@ -8,7 +8,7 @@ namespace Serveur
 {
 
 Serveur::Serveur(QObject *parent) :
-    QObject(parent), m_stockage(), m_etatTransfert(AUCUN_TRANSFERT), m_cache(this)
+    QObject(parent), m_stockage(), m_fichierEnTransfert(0), m_etatTransfert(AUCUN_TRANSFERT), m_cache(this)
 {
     m_serveur = new QTcpServer(this);
 
@@ -56,15 +56,15 @@ quint16 Serveur::start(QDir stockage, quint16 port = 0)
 void Serveur::debuteTransfert(FileHeader &header, Client *client)
 {
     //Génération des versions et ouverture du fichier
-    CacheEntry entry = m_cache.nouveauFichier(header.nomClient);
-    header.noSauvegarde = entry.noSauvegarde;
-    header.noVersion = entry.noVersion;
-    m_fichierEnTransfert.fichier = new QFile(m_stockage.absolutePath() + "/" + entry.nomServeur, this);
+    FileDescription fileDescription = m_cache.nouveauFichier(header.nomClient);
+    header.noSauvegarde = fileDescription.noSauvegarde;
+    header.noVersion = fileDescription.noVersion;
+    m_fichierEnTransfert = new QFile(m_stockage.absolutePath() + "/" + fileDescription.nomServeur, this);
 
-    if (!m_fichierEnTransfert.fichier->open(QIODevice::WriteOnly))
+    if (!m_fichierEnTransfert->open(QIODevice::WriteOnly))
     {
-        console("Impossible d'ouvrir/créer le fichier " + entry.nomServeur);
-        delete m_fichierEnTransfert.fichier;
+        console("Impossible d'ouvrir/créer le fichier " + fileDescription.nomServeur);
+        delete m_fichierEnTransfert;
 
         //Notification du client
         Paquet out;
@@ -74,26 +74,26 @@ void Serveur::debuteTransfert(FileHeader &header, Client *client)
     }
 
     //Ecriture de l'en-tête.
-    QDataStream stream(m_fichierEnTransfert.fichier);
+    QDataStream stream(m_fichierEnTransfert);
     quint8 octetEnTete = (filesVersion << 2) | (header.estUnDossier << 1) | (header.supprime);
     stream << octetEnTete << header.nomClient << header.noSauvegarde << header.noVersion << header.derniereModif;
 
-    m_fichierEnTransfert = header;
+    m_descriptionFichier = header;
     m_etatTransfert = CLIENT_VERS_SERVEUR;
 }
 
 void Serveur::termineTransfert(Client */*client*/)
 {
     //Ajoute l'entrée dans le cache
-    CacheEntry entry;
-    entry = m_fichierEnTransfert;
-    entry.nomServeur = m_fichierEnTransfert.fichier->fileName().section('/', -1);
-    m_cache.ajoute(entry);
+    FileDescription fileDescription;
+    fileDescription = m_descriptionFichier;
+    fileDescription.nomServeur = m_fichierEnTransfert->fileName().section('/', -1);
+    m_cache.ajoute(fileDescription);
 
     //Fermeture du fichier et fin du transfert
-    m_fichierEnTransfert.fichier->close();
-    delete m_fichierEnTransfert.fichier;
-    m_fichierEnTransfert.fichier = 0;
+    m_fichierEnTransfert->close();
+    delete m_fichierEnTransfert;
+    m_fichierEnTransfert = 0;
     m_etatTransfert = AUCUN_TRANSFERT;
 }
 
@@ -102,9 +102,9 @@ void Serveur::annuleTransfert(Client *client)
     if (m_etatTransfert == CLIENT_VERS_SERVEUR)
     {
         //Supprime le fichier
-        m_fichierEnTransfert.fichier->remove();
-        delete m_fichierEnTransfert.fichier;
-        m_fichierEnTransfert.fichier = 0;
+        m_fichierEnTransfert->remove();
+        delete m_fichierEnTransfert;
+        m_fichierEnTransfert = 0;
         m_etatTransfert = AUCUN_TRANSFERT;
 
         Paquet out;
@@ -115,14 +115,14 @@ void Serveur::annuleTransfert(Client *client)
 
 void Serveur::envoiePaquet(Client *client)
 {
-    QByteArray data = m_fichierEnTransfert.fichier->read(MAX_PACKET_SIZE);
+    QByteArray data = m_fichierEnTransfert->read(MAX_PACKET_SIZE);
 
     Paquet out;
     out << SMSG_FILE_DATA << data;
     out >> client;
 
     //On vérifie si l'on a envoyé tout le fichier
-    if (m_fichierEnTransfert.fichier->atEnd())
+    if (m_fichierEnTransfert->atEnd())
     {
         out.clear();
         out << SMSG_FINISH_TRANSFER;
@@ -318,7 +318,7 @@ void Serveur::handleFileData(Paquet *in, Client *)
     *in >> data;
 
     //Ecriture dans le fichier
-    m_fichierEnTransfert.fichier->write(data);
+    m_fichierEnTransfert->write(data);
 }
 
 void Serveur::handleDeleteFile(Paquet *in, Client *client)
@@ -350,15 +350,16 @@ void Serveur::handleFileList(Paquet *in, Client *client)
     quint16 noSauv;
     *in >> noSauv;
 
-    QList<CacheEntry> liste;
+    QList<FileDescription> liste;
     liste = m_cache.listeFichiers(noSauv);
 
     //Envoi de la liste
     Paquet out;
     out << SMSG_FILE_LIST << (quint32) liste.size();
-    foreach(CacheEntry entry, liste)
+    foreach(FileDescription fileDescription, liste)
     {
-        out << entry.nomClient << entry.noSauvegarde << entry.noVersion << entry.derniereModif << entry.estUnDossier;
+        out << fileDescription.nomClient << fileDescription.noSauvegarde << fileDescription.noVersion
+            << fileDescription.derniereModif << fileDescription.estUnDossier;
     }
     out >> client;
 }
@@ -399,10 +400,10 @@ void Serveur::handleRecoverFile(Paquet *in, Client *client)
     }
 
     //On peut lancer le transfert
-    m_fichierEnTransfert.fichier = new QFile(m_stockage.absolutePath() + "/" + nomServeur);
-    if (!m_fichierEnTransfert.fichier->open(QIODevice::ReadOnly))
+    m_fichierEnTransfert = new QFile(m_stockage.absolutePath() + "/" + nomServeur);
+    if (!m_fichierEnTransfert->open(QIODevice::ReadOnly))
     {
-        console("Impossible d'ouvrir le fichier: " + m_fichierEnTransfert.fichier->errorString());
+        console("Impossible d'ouvrir le fichier: " + m_fichierEnTransfert->errorString());
         Paquet out;
         out << SMSG_ERROR << SERR_COULDNT_OPEN_FILE;
         out >> client;
@@ -410,17 +411,17 @@ void Serveur::handleRecoverFile(Paquet *in, Client *client)
         out << SMSG_CANCEL_TRANSFER;
         out >> client;
 
-        delete m_fichierEnTransfert.fichier;
-        m_fichierEnTransfert.fichier = 0;
+        delete m_fichierEnTransfert;
+        m_fichierEnTransfert = 0;
         return;
     }
 
     //Lecture de l'en-tête
     m_etatTransfert = SERVEUR_VERS_CLIENT;
-    QDataStream stream(m_fichierEnTransfert.fichier);
+    QDataStream stream(m_fichierEnTransfert);
     stream.skipRawData(sizeof(quint8));
-    stream >> m_fichierEnTransfert.nomClient >> m_fichierEnTransfert.noSauvegarde >> m_fichierEnTransfert.noVersion
-           >> m_fichierEnTransfert.derniereModif;
+    stream >> m_descriptionFichier.nomClient >> m_descriptionFichier.noSauvegarde >> m_descriptionFichier.noVersion
+           >> m_descriptionFichier.derniereModif;
 
     envoiePaquet(client);
 }

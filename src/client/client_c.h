@@ -61,7 +61,6 @@ private slots:
 
 private:
     void transfertSuivant();
-    void supprimeSuivant();
     void recupereSuivant();
 
 private:

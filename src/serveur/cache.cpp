@@ -54,16 +54,17 @@ void Cache::chargeCache()
     }
 
     //Récupération des infos du cache
-    m_historique.clear();
+    m_nomsFichiers.clear();
     m_fichiersSupprimes.clear();
-    stream >> m_idFichier >> m_noSauvegarde >> m_fichiersSupprimes;
+    m_historique.clear();
+    stream >> m_idFichier >> m_noSauvegarde >> m_nomsFichiers >> m_fichiersSupprimes;
     while (!stream.atEnd())
     {
         quint16 noSauvegarde;
         QList<CacheEntry> liste;
         stream >> noSauvegarde >> liste;
-        m_historique[noSauvegarde] = liste;
-        console("Sauvegarde trouvée: " + nbr(noSauvegarde) + ", nbFichiers: " + nbr(liste.size()));
+        m_historique.insert(noSauvegarde, liste);
+        console("Sauvegarde trouvée: " + nbr(noSauvegarde) + ", nbFichiers: " + nbr(m_historique[noSauvegarde].size()));
     }
     cache.close();
 
@@ -82,13 +83,14 @@ void Cache::sauveCache()
 
     //Ecriture du cache
     QDataStream stream(&cache);
-    stream << cacheVersion << m_idFichier << m_noSauvegarde << m_fichiersSupprimes;
+    stream << cacheVersion << m_idFichier << m_noSauvegarde << m_nomsFichiers << m_fichiersSupprimes;
     QMapIterator<quint16, QList<CacheEntry> > itr(m_historique);
     while(itr.hasNext())
     {
         itr.next();
         stream << itr.key() << itr.value();
     }
+
     cache.close();
 }
 
@@ -150,10 +152,20 @@ void Cache::reconstruireCache()
 
         //Ajout dans le cache
         CacheEntry entry;
+        QString nomClient; //Servira à trouver l'ID du texte
         entry.nomServeur = itr.fileName();
         entry.estUnDossier = octetEnTete & (1 << 1);
         entry.supprime = octetEnTete & 1;
-        fileStream >> entry.nomClient >> entry.noSauvegarde >> entry.noVersion >> entry.derniereModif;
+        fileStream >> nomClient >> entry.noSauvegarde >> entry.noVersion >> entry.derniereModif;
+
+        //Recherche ou création de l'ID de
+        if (int index = m_nomsFichiers.indexOf(nomClient) != -1)
+            entry.idNomClient = index;
+        else
+        {
+            entry.idNomClient = m_nomsFichiers.size();
+            m_nomsFichiers.append(nomClient);
+        }
 
         if (entry.noSauvegarde > noSauvegarde)
         {
@@ -174,17 +186,17 @@ void Cache::reconstruireCache()
     sauveCache();
 }
 
-CacheEntry Cache::nouveauFichier(const QString &nomClient)
+FileDescription Cache::nouveauFichier(const QString &nomClient) const
 {
     //Génération du fichier
     CacheEntry entry;
     QString nbr = QString::number(m_idFichier, 36);
     entry.nomServeur = "_" + QString("0").repeated(13 - nbr.size()) + nbr + ".tlf";
-    entry.nomClient = nomClient;
+    entry.idNomClient = m_nomsFichiers.indexOf(nomClient);
     entry.noSauvegarde = m_noSauvegarde;
 
     //Recheche du No de version
-    QList<CacheEntry> liste = listeFichiers();
+    QList<CacheEntry> liste = listeCacheEntry();
     int index = liste.indexOf(entry);
     if (index == -1)
     {
@@ -197,42 +209,68 @@ CacheEntry Cache::nouveauFichier(const QString &nomClient)
     else
         entry.noVersion = liste.at(index).noVersion + 1;
 
-    return entry;
+    return convertit(entry);
 }
 
-void Cache::ajoute(const CacheEntry &entry)
+void Cache::ajoute(const FileDescription &description)
 {
-    ajouteFichier(entry);
+    //Si nécessaire, on ajour le nom du fichier à la liste
+    if (!m_nomsFichiers.contains(description.nomClient))
+        m_nomsFichiers.append(description.nomClient);
+
+    ajouteFichier(convertit(description));
 
     m_idFichier++;
 }
 
-bool Cache::existe(const QString &nomClient, quint16 noSauvegarde)
+bool Cache::existe(const QString &nomClient, quint16 noSauvegarde) const
 {
-    QList<CacheEntry> liste = listeFichiers(noSauvegarde);
-
-    foreach(CacheEntry entry, liste)
+    QList<CacheEntry> liste = listeCacheEntry(noSauvegarde);
+    int index = m_nomsFichiers.indexOf(nomClient);
+    if (index != -1)
     {
-        if (entry.nomClient == nomClient)
-            return true;
+        foreach(CacheEntry entry, liste)
+        {
+            if (entry.idNomClient == (quint32) index)
+                return true;
+        }
     }
     return false;
 }
 
-QString Cache::nomFichierReel(const QString &nomClient, quint16 noSauvegarde)
+QString Cache::nomFichierReel(const QString &nomClient, quint16 noSauvegarde) const
 {
-    QList<CacheEntry> liste = listeFichiers(noSauvegarde);
-
-    foreach(CacheEntry entry, liste)
+    QList<CacheEntry> liste = listeCacheEntry(noSauvegarde);
+    int index = m_nomsFichiers.indexOf(nomClient);
+    if (index != -1)
     {
-        if (entry.nomClient == nomClient)
-            return entry.nomServeur;
+        foreach(CacheEntry entry, liste)
+        {
+            if (entry.idNomClient == (quint32) index)
+                return entry.nomServeur;
+        }
     }
 
     return QString();
 }
 
-QList<CacheEntry> Cache::listeFichiers(quint16 noSauvegarde)
+QList<FileDescription> Cache::listeFichiers(quint16 noSauvegarde) const
+{
+    quint16 max = -1; //Il est impossible de comparer directement à -1
+    if (noSauvegarde == max)
+        noSauvegarde = m_noSauvegarde;
+
+    //Conversion de toutes les entrées
+    QList<FileDescription> liste;
+    foreach(CacheEntry entry, m_historique.value(noSauvegarde))
+    {
+        liste.append(convertit(entry));
+    }
+
+    return liste;
+}
+
+QList<Cache::CacheEntry> Cache::listeCacheEntry(quint16 noSauvegarde) const
 {
     quint16 max = -1; //Il est impossible de comparer directement à -1
     if (noSauvegarde == max)
@@ -281,6 +319,49 @@ void Cache::ajouteFichier(const CacheEntry &entry)
     //On ajoute le fichier à la liste des fichiers supprimés si nécessaire
     if (entry.supprime)
         m_fichiersSupprimes.append(entry);
+}
+
+FileDescription Cache::convertit(const CacheEntry &entry) const
+{
+    FileDescription description;
+    description.nomClient = entry.idNomClient < (quint32) m_nomsFichiers.size() ? m_nomsFichiers.at(entry.idNomClient) : QString();
+    description.nomServeur = entry.nomServeur;
+    description.noSauvegarde = entry.noSauvegarde;
+    description.noVersion = entry.noVersion;
+    description.derniereModif = entry.derniereModif;
+    description.estUnDossier = entry.estUnDossier;
+    description.supprime = entry.supprime;
+
+    return description;
+}
+
+Cache::CacheEntry Cache::convertit(const FileDescription &description) const
+{
+    CacheEntry entry;
+    entry.idNomClient = m_nomsFichiers.indexOf(description.nomClient);
+    entry.nomServeur = description.nomServeur;
+    entry.noSauvegarde = description.noSauvegarde;
+    entry.noVersion = description.noVersion;
+    entry.derniereModif = description.derniereModif;
+    entry.estUnDossier = description.estUnDossier;
+    entry.supprime = description.supprime;
+
+    return entry;
+}
+
+
+QDataStream &operator>>(QDataStream &stream, Cache::CacheEntry &entry)
+{
+    stream >> entry.nomServeur >> entry.idNomClient >> entry.noSauvegarde >> entry.noVersion
+           >> entry.derniereModif >> entry.estUnDossier >> entry.supprime;
+    return stream;
+}
+
+QDataStream &operator<<(QDataStream &stream, const Cache::CacheEntry &entry)
+{
+    stream << entry.nomServeur << entry.idNomClient << entry.noSauvegarde << entry.noVersion
+           << entry.derniereModif << entry.estUnDossier << entry.supprime;
+    return stream;
 }
 
 }

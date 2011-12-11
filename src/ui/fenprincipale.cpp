@@ -14,7 +14,7 @@ FenPrincipale::FenPrincipale(QWidget *parent) :
     QMainWindow(parent), ui(new Ui::FenPrincipale), m_dossiersDeTransfert(), m_enAttenteDeTransfert(false), m_enAttenteDeRecuperation(false)
 {
     ui->setupUi(this);
-    m_dossiersDeTransfert << "E:/dev";
+    m_dossiersDeTransfert << "E:/dev/Programmation";
 
     //Création des objets serveur et client
     //TODO: les allouer seulement quand c'est nécessaire (au lancement de la sauvegarde)
@@ -77,6 +77,7 @@ void FenPrincipale::listeRecue(QList<FileHeader> listeDistante)
     //Envoi des fichiers
     if (m_enAttenteDeTransfert)
     {
+        m_enAttenteDeTransfert = false;
         //Génération de la liste locale
         QList<QString> listeLocale;
         int n = 0;
@@ -184,6 +185,7 @@ void FenPrincipale::listeRecue(QList<FileHeader> listeDistante)
     //Récupération des fichiers
     if (m_enAttenteDeRecuperation)
     {
+        m_enAttenteDeRecuperation = false;
         listeDistante = copieListe;
         QMetaObject::invokeMethod(m_client, "setDossierRecuperation", Qt::QueuedConnection, Q_ARG(QDir,QDir("E:/Récupération")));
 
@@ -192,10 +194,7 @@ void FenPrincipale::listeRecue(QList<FileHeader> listeDistante)
         {
             QMetaObject::invokeMethod(m_client, "recupereFichier", Qt::QueuedConnection, Q_ARG(FileHeader,header));
         }
-
-        m_enAttenteDeRecuperation = false;
     }
-
 }
 
 void FenPrincipale::on_btn1_clicked()

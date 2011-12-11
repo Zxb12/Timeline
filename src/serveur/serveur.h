@@ -67,7 +67,8 @@ private:
 
     //Dossier de stockage
     QDir m_stockage;
-    FileDescription m_fichierEnTransfert;
+    FileDescription m_descriptionFichier;
+    QFile *m_fichierEnTransfert;
     EtatTransfert m_etatTransfert;
 
     //Cache de fichiers

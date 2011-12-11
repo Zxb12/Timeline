@@ -144,7 +144,7 @@ void Client::supprime(const QString &adresse)
     //On ajoute le fichier à la liste et on lance la suppression si nécessaire
     m_listeSuppressions.append(adresse);
     if (m_etatTransfert == AUCUN_TRANSFERT)
-        supprimeSuivant();
+        transfertSuivant();
 }
 
 void Client::listeFichiers(quint16 noSauvegarde)
@@ -197,8 +197,18 @@ void Client::transfertSuivant()
     //Récupération du fichier suivant
     if (m_listeTransfert.size() == 0)
     {
-        supprimeSuivant();
-        console("Transferts terminés");
+        if (!m_listeSuppressions.isEmpty())
+        {
+            foreach(QString fichier, m_listeSuppressions)
+            {
+                //Supprime un fichier du serveur
+                Paquet out;
+                out << CMSG_DELETE_FILE << fichier;
+                out >> m_socket;
+            }
+            m_listeSuppressions.clear();
+            console("Transferts terminés");
+        }
         return;
     }
 
@@ -224,17 +234,6 @@ void Client::transfertSuivant()
     out << CMSG_INITIATE_TRANSFER << fichier.absoluteFilePath() << fichier.isDir() << fichier.lastModified();
     out >> m_socket;
     m_etatTransfert = EN_ATTENTE;
-}
-
-void Client::supprimeSuivant()
-{
-    if (!m_listeSuppressions.isEmpty())
-    {
-        //Supprime un fichier du serveur
-        Paquet out;
-        out << CMSG_DELETE_FILE << m_listeSuppressions.takeFirst();
-        out >> m_socket;
-    }
 }
 
 void Client::recupereSuivant()
@@ -359,7 +358,7 @@ void Client::handleTransferComplete(Paquet *)
 
 void Client::handleFileDeleted(Paquet *)
 {
-    supprimeSuivant();
+    transfertSuivant();
 }
 
 void Client::handleFileList(Paquet *in)
