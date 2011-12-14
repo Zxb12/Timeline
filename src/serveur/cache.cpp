@@ -3,6 +3,8 @@
 #include "src/shared/shared.h"
 
 #include <QDirIterator>
+#include <QProcess>
+#include <QCoreApplication>
 
 namespace Serveur
 {
@@ -24,31 +26,31 @@ void Cache::changeDossier(const QDir &dossier)
 
 void Cache::chargeCache()
 {
-    QFile cache(m_dossier.absolutePath() + "/" + cacheFileName);
-
     //On vérifie que le cache existe
-    if (!cache.exists())
+    if (!QFile::exists(m_dossier.absolutePath() + "/" + cacheFileName))
     {
         reconstruireCache();
         return;
     }
 
-    if (!cache.open(QIODevice::ReadOnly))
-    {
-        console("Impossible d'ouvrir le fichier de cache. TODO: CODE A METTRE A JOUR");
-        return;
-    }
+    //Décompression du cache
+    console("Décompression du cache");
+    QProcess gzip;
+    gzip.setStandardInputFile(m_dossier.absolutePath() + "/" + cacheFileName);
+    gzip.start(gZipExeDecompression);
+    gzip.waitForStarted(-1);
+    gzip.waitForFinished(-1);
+    QByteArray data = gzip.readAllStandardOutput();
 
     //Extraction de la version du cache
-    QDataStream stream(&cache);
+    QDataStream stream(data);
     quint8 version;
     stream >> version;
 
     //Vérification de la version du cache
     if (version != cacheVersion)
     {
-        console("Cache obsolète...");
-        cache.close();
+        console("Cache obsolète: (v" + nbr(version) + ")");
         reconstruireCache();
         return;
     }
@@ -66,23 +68,15 @@ void Cache::chargeCache()
         m_historique.insert(noSauvegarde, liste);
         console("Sauvegarde trouvée: " + nbr(noSauvegarde) + ", nbFichiers: " + nbr(m_historique[noSauvegarde].size()));
     }
-    cache.close();
 
     console("Cache de " + nbr(m_historique.size()) + " entrées chargé");
 }
 
 void Cache::sauveCache()
 {
-    //Ouverture du cache
-    QFile cache(m_dossier.absolutePath() + "/" + cacheFileName);
-    if (!cache.open(QIODevice::WriteOnly | QIODevice::Truncate))
-    {
-        console("Impossible de sauvegarder le cache: " + cache.errorString());
-        return;
-    }
-
     //Ecriture du cache
-    QDataStream stream(&cache);
+    QByteArray data;
+    QDataStream stream(&data, QIODevice::WriteOnly);
     stream << cacheVersion << m_idFichier << m_noSauvegarde << m_nomsFichiers << m_fichiersSupprimes;
     QMapIterator<quint16, QList<CacheEntry> > itr(m_historique);
     while(itr.hasNext())
@@ -91,7 +85,19 @@ void Cache::sauveCache()
         stream << itr.key() << itr.value();
     }
 
-    cache.close();
+    //Compression du cache
+    QProcess gzip;
+    gzip.setStandardOutputFile(m_dossier.absolutePath() + "/" + cacheFileName);
+    gzip.start(gZipExeCompression);
+    if (!gzip.waitForStarted(-1))
+    {
+        console("Exécutable GZip non trouvé impossible à lancer !");
+        return;
+    }
+    gzip.write(data);
+    data.clear();
+    gzip.closeWriteChannel();
+    gzip.waitForFinished(-1);
 }
 
 void Cache::reconstruireCache()
