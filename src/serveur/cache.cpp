@@ -74,6 +74,10 @@ void Cache::chargeCache()
 
 void Cache::sauveCache()
 {
+    //On vérifie si l'on a des données à sauvegarder
+    if (m_historique.isEmpty())
+        return;
+
     //Ecriture du cache
     QByteArray data;
     QDataStream stream(&data, QIODevice::WriteOnly);
